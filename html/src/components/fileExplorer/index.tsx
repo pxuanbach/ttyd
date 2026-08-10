@@ -1,4 +1,4 @@
-import { h, Component } from 'preact';
+import { h, Component, Fragment } from 'preact';
 import { DirectoryTree } from './DirectoryTree';
 import { FileEditor } from './FileEditor';
 import { FileEntry, OpenTab } from './types';
@@ -13,17 +13,55 @@ interface State {
     activeTab: string | null;
     tabs: OpenTab[];
     showEditor: boolean;
+    editorHeight: number;
+    isResizing: boolean;
 }
 
 export class FileExplorer extends Component<Props, State> {
+    private resizeStartY: number = 0;
+    private resizeStartHeight: number = 250;
+
     constructor(props: Props) {
         super(props);
         this.state = {
             activeTab: null,
             tabs: [],
             showEditor: false,
+            editorHeight: 250,
+            isResizing: false,
         };
     }
+
+    componentDidMount() {
+        document.addEventListener('mousemove', this.handleMouseMove);
+        document.addEventListener('mouseup', this.handleMouseUp);
+    }
+
+    componentWillUnmount() {
+        document.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mouseup', this.handleMouseUp);
+    }
+
+    handleMouseDown = (e: MouseEvent) => {
+        e.preventDefault();
+        this.resizeStartY = e.clientY;
+        this.resizeStartHeight = this.state.editorHeight;
+        this.setState({ isResizing: true });
+    };
+
+    handleMouseMove = (e: MouseEvent) => {
+        if (!this.state.isResizing) return;
+
+        const deltaY = this.resizeStartY - e.clientY;
+        const newHeight = Math.max(100, Math.min(this.resizeStartHeight + deltaY, window.innerHeight * 0.8));
+        this.setState({ editorHeight: newHeight });
+    };
+
+    handleMouseUp = () => {
+        if (this.state.isResizing) {
+            this.setState({ isResizing: false });
+        }
+    };
 
     handleOpenFile = async (entry: FileEntry) => {
         // Check if file is already open
@@ -175,16 +213,22 @@ export class FileExplorer extends Component<Props, State> {
                     </div>
 
                     {tabs.length > 0 && showEditor && (
-                        <div class="explorer-editor">
-                            <FileEditor
-                                tabs={tabs}
-                                activeTab={activeTab}
-                                onSelectTab={this.handleSelectTab}
-                                onCloseTab={this.handleCloseTab}
-                                onTabContentChange={this.handleTabContentChange}
-                                onOpenFile={this.handleOpenFile}
+                        <Fragment>
+                            <div
+                                class={`resize-handle ${this.state.isResizing ? 'dragging' : ''}`}
+                                onMouseDown={this.handleMouseDown}
                             />
-                        </div>
+                            <div class="explorer-editor" style={{ height: `${this.state.editorHeight}px` }}>
+                                <FileEditor
+                                    tabs={tabs}
+                                    activeTab={activeTab}
+                                    onSelectTab={this.handleSelectTab}
+                                    onCloseTab={this.handleCloseTab}
+                                    onTabContentChange={this.handleTabContentChange}
+                                    onOpenFile={this.handleOpenFile}
+                                />
+                            </div>
+                        </Fragment>
                     )}
                 </div>
             </div>

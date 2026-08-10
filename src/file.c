@@ -16,9 +16,21 @@
 #include "utils.h"
 
 #ifdef _WIN32
-// Windows replacement for realpath
+// Windows replacement for realpath with forward slash normalization
 static char *win_realpath(const char *path, char *resolved) {
-    if (_fullpath(resolved, path, _MAX_PATH) != NULL) {
+    // Convert forward slashes to backslashes for Windows API
+    char win_path[_MAX_PATH];
+    int j = 0;
+    for (int i = 0; path[i] && j < _MAX_PATH - 1; i++) {
+        win_path[j++] = (path[i] == '/') ? '\\' : path[i];
+    }
+    win_path[j] = '\0';
+    
+    if (_fullpath(resolved, win_path, _MAX_PATH) != NULL) {
+        // Normalize backslashes to forward slashes for consistent comparison
+        for (char *p = resolved; *p; p++) {
+            if (*p == '\\') *p = '/';
+        }
         return resolved;
     }
     return NULL;
@@ -28,6 +40,24 @@ static char *win_realpath(const char *path, char *resolved) {
 
 #define MAX_FILE_SIZE (10 * 1024 * 1024)  // 10MB limit
 #define MAX_ENTRIES 1000
+
+// Helper to build full path from base and relative path
+static void build_full_path(const char *base_path, const char *relative_path, char *full_path, size_t size) {
+    if (relative_path == NULL || strlen(relative_path) == 0) {
+        snprintf(full_path, size, "%s", base_path);
+        return;
+    }
+    
+    // Check if path is absolute (Unix / or Windows C:)
+    int is_absolute = (relative_path[0] == '/' || 
+                      (strlen(relative_path) >= 2 && relative_path[1] == ':'));
+    
+    if (is_absolute) {
+        snprintf(full_path, size, "%s", relative_path);
+    } else {
+        snprintf(full_path, size, "%s/%s", base_path, relative_path);
+    }
+}
 
 static void append_entry(dir_result_t *result, const char *name, const char *full_path, struct stat *st) {
     if (result->count >= MAX_ENTRIES) return;
@@ -69,16 +99,39 @@ bool is_path_safe(const char *base_path, const char *requested_path) {
     // Resolve base path
     if (realpath(base_path, resolved_base) == NULL) return false;
 
-    // Build full path
-    char full_path[PATH_MAX];
-    if (requested_path[0] == '/') {
-        snprintf(full_path, sizeof(full_path), "%s%s", base_path, requested_path);
-    } else {
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, requested_path);
+    // Normalize base path (ensure forward slashes)
+    for (char *p = resolved_base; *p; p++) {
+        if (*p == '\\') *p = '/';
     }
 
-    // Resolve requested path
-    if (realpath(full_path, resolved_req) == NULL) return false;
+    // Build full path first, then resolve it
+    char full_path[PATH_MAX];
+    // On Windows, check for absolute path (C: or D: drive letter)
+    int is_absolute = (requested_path[0] == '/' || 
+                       (strlen(requested_path) >= 2 && requested_path[1] == ':'));
+    
+    if (is_absolute) {
+        // Absolute path - use as is
+        snprintf(full_path, sizeof(full_path), "%s", requested_path);
+    } else {
+        // Relative path - prepend base path
+        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, requested_path);
+    }
+    
+    // Normalize full path (replace backslashes with forward slashes for Windows)
+    for (char *p = full_path; *p; p++) {
+        if (*p == '\\') *p = '/';
+    }
+    
+    // Resolve the full path
+    if (realpath(full_path, resolved_req) == NULL) {
+        return false;
+    }
+    
+    // Normalize resolved path
+    for (char *p = resolved_req; *p; p++) {
+        if (*p == '\\') *p = '/';
+    }
 
     // Check if resolved path starts with base path
     size_t base_len = strlen(resolved_base);
@@ -89,6 +142,7 @@ bool is_path_safe(const char *base_path, const char *requested_path) {
 
     return true;
 }
+
 
 const char *get_current_directory(void) {
     // Priority: server->cwd > process cwd > HOME > /tmp
@@ -118,10 +172,8 @@ dir_result_t *list_directory(const char *path) {
     } else if (!is_path_safe(base_path, path)) {
         result->error = strdup("Access denied: invalid path");
         return result;
-    } else if (path[0] == '/') {
-        snprintf(full_path, sizeof(full_path), "%s%s", base_path, path);
     } else {
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, path);
+        build_full_path(base_path, path, full_path, sizeof(full_path));
     }
 
     // Validate the constructed path
@@ -172,8 +224,6 @@ file_result_t *read_file(const char *path) {
 
     const char *base_path = get_current_directory();
 
-    // Build full path
-    char full_path[PATH_MAX];
     if (path == NULL || strlen(path) == 0) {
         result->error = strdup("No path specified");
         return result;
@@ -184,11 +234,9 @@ file_result_t *read_file(const char *path) {
         return result;
     }
 
-    if (path[0] == '/') {
-        snprintf(full_path, sizeof(full_path), "%s%s", base_path, path);
-    } else {
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, path);
-    }
+    // Build full path
+    char full_path[PATH_MAX];
+    build_full_path(base_path, path, full_path, sizeof(full_path));
 
     // Resolve and validate
     char resolved_path[PATH_MAX];
@@ -255,11 +303,7 @@ write_result_t *write_file(const char *path, const char *content, size_t len) {
         return result;
     }
 
-    if (path[0] == '/') {
-        snprintf(full_path, sizeof(full_path), "%s%s", base_path, path);
-    } else {
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, path);
-    }
+    build_full_path(base_path, path, full_path, sizeof(full_path));
 
     // Resolve and validate
     char resolved_path[PATH_MAX];
@@ -332,11 +376,7 @@ write_result_t *delete_file(const char *path) {
         return result;
     }
 
-    if (path[0] == '/') {
-        snprintf(full_path, sizeof(full_path), "%s%s", base_path, path);
-    } else {
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, path);
-    }
+    build_full_path(base_path, path, full_path, sizeof(full_path));
 
     // Resolve and validate
     char resolved_path[PATH_MAX];

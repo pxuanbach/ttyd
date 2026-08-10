@@ -2,6 +2,8 @@
 $sidebar-width: 280px;
 $editor-height: 250px;
 $header-height: 36px;
+$min-editor-height: 100px;
+$max-editor-height: 80%;
 $border-color: #3c3c3c;
 $bg-primary: #1e1e1e;
 $bg-secondary: #252526;
@@ -14,7 +16,7 @@ $accent-color: #007acc;
 .file-explorer-toggle {
   position: fixed;
   top: 10px;
-  left: 10px;
+  right: 10px;
   z-index: 100;
   width: 36px;
   height: 36px;
@@ -41,11 +43,11 @@ $accent-color: #007acc;
 .file-explorer {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   bottom: 0;
   width: $sidebar-width;
   background: $bg-primary;
-  border-right: 1px solid $border-color;
+  border-left: 1px solid $border-color;
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -103,17 +105,67 @@ $accent-color: #007acc;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
 
     .explorer-tree {
       flex: 1;
       overflow: auto;
       min-height: 100px;
+      scrollbar-width: none;  // Firefox
+      -ms-overflow-style: none;  // IE/Edge
+      &::-webkit-scrollbar {
+        display: none;  // Chrome/Safari
+      }
+    }
+
+    .resize-handle {
+      height: 8px;
+      background: $border-color;
+      cursor: ns-resize;
+      flex-shrink: 0;
+      transition: background-color 0.2s;
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      // Grip dots indicator
+      &::before {
+        content: '';
+        width: 30px;
+        height: 3px;
+        background: repeating-linear-gradient(
+          90deg,
+          $text-secondary 0px,
+          $text-secondary 2px,
+          transparent 2px,
+          transparent 4px
+        );
+        border-radius: 1px;
+      }
+
+      &:hover, &.dragging {
+        background: $accent-color;
+        &::before {
+          background: white;
+        }
+      }
     }
 
     .explorer-editor {
-      height: $editor-height;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       border-top: 1px solid $border-color;
-      flex-shrink: 0;
+      min-height: $min-editor-height;
+      max-height: $max-editor-height;
+      
+      .file-editor {
+        flex: 1;
+        min-height: 0;  // Important for flex children
+      }
     }
   }
 }
@@ -165,6 +217,25 @@ $accent-color: #007acc;
   .tree-content {
     flex: 1;
     overflow: auto;
+    scrollbar-width: thin;  // Firefox
+    -ms-overflow-style: none;  // IE/Edge
+    
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 2px;
+
+      &:hover {
+        background: $border-color;
+      }
+    }
   }
 
   .tree-loading,
@@ -195,6 +266,10 @@ $accent-color: #007acc;
 
   .tree-entries {
     padding: 4px 0;
+  }
+
+  .tree-children {
+    // Nested entries are handled by the depth prop in FileItem
   }
 }
 
@@ -281,6 +356,12 @@ $accent-color: #007acc;
       display: flex;
       flex: 1;
       overflow-x: auto;
+      scrollbar-width: none;  // Firefox
+      -ms-overflow-style: none;  // IE/Edge
+      
+      &::-webkit-scrollbar {
+        display: none;  // Chrome/Safari
+      }
     }
 
     .tabs-actions {
@@ -450,22 +531,11 @@ $accent-color: #007acc;
     resize: none;
     outline: none;
     overflow: auto;
-
+    scrollbar-width: none;  // Firefox
+    -ms-overflow-style: none;  // IE/Edge
+    
     &::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: $bg-primary;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: $border-color;
-      border-radius: 4px;
-
-      &:hover {
-        background: lighten($border-color, 10%);
-      }
+      display: none;  // Chrome/Safari
     }
   }
 }

@@ -237,6 +237,9 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       pss->authenticated = false;
       pss->wsi = wsi;
       pss->lws_close_status = LWS_CLOSE_STATUS_NOSTATUS;
+      pss->buffer = NULL;
+      pss->len = 0;
+      pss->pty_buf = NULL;
 
       if (server->url_arg) {
         while (lws_hdr_copy_fragment(wsi, buf, sizeof(buf), WSI_TOKEN_HTTP_URI_ARGS, n++) > 0) {
@@ -251,7 +254,7 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       server->client_count++;
 
       lws_get_peer_simple(lws_get_network_wsi(wsi), pss->address, sizeof(pss->address));
-      lwsl_notice("WS   %s - %s, clients: %d\n", pss->path, pss->address, server->client_count);
+      lwsl_notice("WS   ESTABLISHED %s - %s, clients: %d\n", pss->path, pss->address, server->client_count);
       break;
 
     case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -367,7 +370,12 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
       if (pss->wsi == NULL) break;
 
       server->client_count--;
-      lwsl_notice("WS closed from %s, clients: %d\n", pss->address, server->client_count);
+      
+      // Get more info about the close
+      int close_status = pss->lws_close_status;
+      lwsl_notice("WS CLOSED from %s (stored_status=%d), clients: %d\n", 
+                  pss->address, close_status, server->client_count);
+      
       if (pss->buffer != NULL) free(pss->buffer);
       if (pss->pty_buf != NULL) pty_buf_free(pss->pty_buf);
       for (int i = 0; i < pss->argc; i++) {
@@ -395,6 +403,14 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
         } else {
           exit(0);
         }
+      }
+      break;
+
+    case LWS_CALLBACK_WSI_DESTROY:
+      lwsl_notice("WS WSI_DESTROY from %s (initialized=%d)\n", 
+                  pss ? pss->address : "unknown", pss ? pss->initialized : -1);
+      if (pss && pss->process != NULL && process_running(pss->process)) {
+        pty_kill(pss->process, server->sig_code);
       }
       break;
 

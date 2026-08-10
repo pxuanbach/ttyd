@@ -122,3 +122,15 @@ Dependencies: libuv, libwebsockets (3.2.0+ with libuv), json-c, zlib, OpenSSL/Mb
 - **Windows specifics**: Uses `getopt-win32` via vcpkg, `_WIN32_WINNT=0xa00` (Windows 10+)
 - **Static assets**: Sixel images, ZMODEM file transfer, clipboard integration
 - **Git versioning**: Version extracted from git tags (SEM_VER) and commit hash
+
+## DEVELOPMENT RULES
+
+### Port Assignment
+- **Dev port: 8090** - Always use this port for local development
+- **Never assign new ports** without explicit user approval
+- When port is occupied, kill the process first (via `taskkill //F //PID <pid>`) before reusing
+
+### Build & Run Workflow
+1. Kill existing ttyd process on target port first
+2. Build: `cmake --build build` (from build directory)
+3. Run: `./build/ttyd.exe -p 8090 -w "<cwd>" [-W] <command>`

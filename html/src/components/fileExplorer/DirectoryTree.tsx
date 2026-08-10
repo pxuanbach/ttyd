@@ -98,12 +98,65 @@ export class DirectoryTree extends Component<Props, State> {
 
     navigateUp = () => {
         const { currentPath } = this.state;
-        const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
-        this.loadDirectory(parentPath === '/' ? undefined : parentPath);
+        // Normalize path - replace backslashes with forward slashes, remove trailing slashes
+        const normalizedPath = currentPath.split('\\').join('/').replace(/\/+$/, '');
+        const parts = normalizedPath.split('/');
+
+        if (parts.length <= 1 || normalizedPath === '') {
+            // Already at root
+            return;
+        }
+
+        parts.pop();
+        const parentPath = parts.join('/') || '';
+        this.loadDirectory(parentPath || undefined);
+    };
+
+    getChildEntries = (parentPath: string): FileEntry[] => {
+        const { entries } = this.state;
+        const normalizedParent = parentPath.split('\\').join('/').replace(/\/+$/, '');
+
+        return entries.filter(entry => {
+            const normalizedEntry = entry.path.split('\\').join('/').replace(/\/+$/, '');
+            const entryDir = normalizedEntry.substring(0, normalizedEntry.lastIndexOf('/'));
+            return entryDir === normalizedParent;
+        });
+    };
+
+    renderEntry = (entry: FileEntry, depth: number) => {
+        const { expandedPaths, selectedPath } = this.state;
+        const isExpanded = expandedPaths.has(entry.path);
+
+        return (
+            <div key={entry.path}>
+                <FileItem
+                    entry={entry}
+                    depth={depth}
+                    isExpanded={isExpanded}
+                    isSelected={selectedPath === entry.path}
+                    onToggle={this.handleToggle}
+                    onSelect={this.handleSelect}
+                    onOpen={this.handleOpen}
+                />
+                {entry.isDirectory && isExpanded && (
+                    <div class="tree-children">
+                        {this.getChildEntries(entry.path).map(child => this.renderEntry(child, depth + 1))}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     render() {
-        const { entries, expandedPaths, selectedPath, currentPath, loading, error } = this.state;
+        const { entries, currentPath, loading, error } = this.state;
+
+        // Get root entries (direct children of current path)
+        const normalizedCurrentPath = currentPath.replace(/\\/g, '/').replace(/\/+$/, '');
+        const rootEntries = entries.filter(entry => {
+            const normalizedEntry = entry.path.replace(/\\/g, '/').replace(/\/+$/, '');
+            const entryDir = normalizedEntry.substring(0, normalizedEntry.lastIndexOf('/'));
+            return entryDir === normalizedCurrentPath;
+        });
 
         return (
             <div class="directory-tree">
@@ -133,35 +186,10 @@ export class DirectoryTree extends Component<Props, State> {
                         </div>
                     )}
 
-                    {!loading && !error && entries.length === 0 && <div class="tree-empty">Empty directory</div>}
+                    {!loading && !error && rootEntries.length === 0 && <div class="tree-empty">Empty directory</div>}
 
-                    {!loading && !error && entries.length > 0 && (
-                        <div class="tree-entries">
-                            {entries.map(entry => {
-                                // Build tree structure based on parent path
-                                const relativePath = currentPath
-                                    ? entry.path.replace(currentPath + '/', '')
-                                    : entry.name;
-
-                                if (relativePath.includes('/')) {
-                                    // This is a nested entry, skip it (it will be rendered under its parent)
-                                    return null;
-                                }
-
-                                return (
-                                    <FileItem
-                                        key={entry.path}
-                                        entry={entry}
-                                        depth={0}
-                                        isExpanded={expandedPaths.has(entry.path)}
-                                        isSelected={selectedPath === entry.path}
-                                        onToggle={this.handleToggle}
-                                        onSelect={this.handleSelect}
-                                        onOpen={this.handleOpen}
-                                    />
-                                );
-                            })}
-                        </div>
+                    {!loading && !error && rootEntries.length > 0 && (
+                        <div class="tree-entries">{rootEntries.map(entry => this.renderEntry(entry, 0))}</div>
                     )}
                 </div>
             </div>

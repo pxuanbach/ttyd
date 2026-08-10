@@ -157,21 +157,28 @@ static int send_json_response(struct lws *wsi, const char *json, size_t len) {
 }
 
 // Handle GET /api/directory
-static int handle_api_directory(struct lws *wsi, const char *path) {
-  // Extract path from query string
-  const char *query = strchr(path, '?');
+static int handle_api_directory(struct lws *wsi) {
+  // Get the full URI path
+  char full_uri[512] = {0};
+  int uri_len = lws_hdr_total_length(wsi, WSI_TOKEN_GET_URI);
+  if (uri_len > 0 && uri_len < (int)sizeof(full_uri)) {
+    lws_hdr_copy(wsi, full_uri, sizeof(full_uri), WSI_TOKEN_GET_URI);
+  }
+  
+  // Extract path after /api/directory
+  // Supports: /api/directory or /api/directory/some/path
   char dir_path[256] = {0};
-
-  if (query != NULL) {
-    // Parse path= parameter
-    const char *path_param = strstr(query, "path=");
-    if (path_param != NULL) {
-      path_param += 5;  // skip "path="
-      const char *end = strchr(path_param, '&');
-      if (end == NULL) end = path_param + strlen(path_param);
-      int len = (int)(end - path_param);
-      if (len > 0 && len < (int)sizeof(dir_path)) {
-        urldecode(path_param, len, dir_path);
+  const char *api_dir = "/api/directory";
+  if (strncmp(full_uri, api_dir, strlen(api_dir)) == 0) {
+    const char *path_part = full_uri + strlen(api_dir);
+    if (*path_part == '/') {
+      path_part++;  // skip leading /
+    }
+    if (*path_part != '\0') {
+      // URL decode the path
+      int len = strlen(path_part);
+      if (len < (int)sizeof(dir_path)) {
+        urldecode(path_part, len, dir_path);
       }
     }
   }
@@ -213,20 +220,28 @@ static int handle_api_directory(struct lws *wsi, const char *path) {
 }
 
 // Handle GET /api/file
-static int handle_api_file_get(struct lws *wsi, const char *path) {
-  // Extract path from query string
-  const char *query = strchr(path, '?');
+static int handle_api_file_get(struct lws *wsi) {
+  // Get the full URI path
+  char full_uri[512] = {0};
+  int uri_len = lws_hdr_total_length(wsi, WSI_TOKEN_GET_URI);
+  if (uri_len > 0 && uri_len < (int)sizeof(full_uri)) {
+    lws_hdr_copy(wsi, full_uri, sizeof(full_uri), WSI_TOKEN_GET_URI);
+  }
+  
+  // Extract path after /api/file
+  // Supports: /api/file/path/to/file.txt
   char file_path[256] = {0};
-
-  if (query != NULL) {
-    const char *path_param = strstr(query, "path=");
-    if (path_param != NULL) {
-      path_param += 5;  // skip "path="
-      const char *end = strchr(path_param, '&');
-      if (end == NULL) end = path_param + strlen(path_param);
-      int len = (int)(end - path_param);
-      if (len > 0 && len < (int)sizeof(file_path)) {
-        urldecode(path_param, len, file_path);
+  const char *api_file = "/api/file";
+  if (strncmp(full_uri, api_file, strlen(api_file)) == 0) {
+    const char *path_part = full_uri + strlen(api_file);
+    if (*path_part == '/') {
+      path_part++;  // skip leading /
+    }
+    if (*path_part != '\0') {
+      // URL decode the path
+      int len = strlen(path_part);
+      if (len < (int)sizeof(file_path)) {
+        urldecode(path_part, len, file_path);
       }
     }
   }
@@ -351,19 +366,26 @@ static int handle_api_file_post(struct lws *wsi, char *body, size_t len) {
 }
 
 // Handle DELETE /api/file
-static int handle_api_file_delete(struct lws *wsi, const char *path) {
-  const char *query = strchr(path, '?');
+static int handle_api_file_delete(struct lws *wsi) {
+  // Get the full URI path
+  char full_uri[512] = {0};
+  int uri_len = lws_hdr_total_length(wsi, WSI_TOKEN_GET_URI);
+  if (uri_len > 0 && uri_len < (int)sizeof(full_uri)) {
+    lws_hdr_copy(wsi, full_uri, sizeof(full_uri), WSI_TOKEN_GET_URI);
+  }
+  
+  // Extract path after /api/file
   char file_path[256] = {0};
-
-  if (query != NULL) {
-    const char *path_param = strstr(query, "path=");
-    if (path_param != NULL) {
-      path_param += 5;
-      const char *end = strchr(path_param, '&');
-      if (end == NULL) end = path_param + strlen(path_param);
-      int len = (int)(end - path_param);
-      if (len > 0 && len < (int)sizeof(file_path)) {
-        urldecode(path_param, len, file_path);
+  const char *api_file = "/api/file";
+  if (strncmp(full_uri, api_file, strlen(api_file)) == 0) {
+    const char *path_part = full_uri + strlen(api_file);
+    if (*path_part == '/') {
+      path_part++;  // skip leading /
+    }
+    if (*path_part != '\0') {
+      int len = strlen(path_part);
+      if (len < (int)sizeof(file_path)) {
+        urldecode(path_part, len, file_path);
       }
     }
   }
@@ -434,12 +456,15 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
       // File API routing
       if (strncmp(pss->path, api_directory, strlen(api_directory)) == 0) {
         // GET /api/directory?path=...
-        return handle_api_directory(wsi, pss->path);
+        return handle_api_directory(wsi);
       }
       if (strncmp(pss->path, api_file, strlen(api_file)) == 0) {
         // GET /api/file?path=...
-        return handle_api_file_get(wsi, pss->path);
+        return handle_api_file_get(wsi);
       }
+      
+      // Log WebSocket upgrade attempts
+      lwsl_notice("HTTP callback: path='%s', ws_endpoint='%s'\n", pss->path, endpoints.ws);
 
       // redirects `/base-path` to `/base-path/`
       if (strcmp(pss->path, endpoints.parent) == 0) {

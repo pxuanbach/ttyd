@@ -27,13 +27,15 @@ export class FileApi {
     }
 
     static async listDirectory(path?: string): Promise<DirectoryResult> {
-        const query = path ? `?path=${encodeURIComponent(path)}` : '';
-        return this.request<DirectoryResult>(`/api/directory${query}`);
+        // API: /api/directory or /api/directory/some/path
+        const endpoint = path ? `/api/directory/${encodeURIComponent(path)}` : '/api/directory';
+        return this.request<DirectoryResult>(endpoint);
     }
 
     static async readFile(path: string): Promise<FileResult> {
-        const query = `?path=${encodeURIComponent(path)}`;
-        return this.request<FileResult>(`/api/file${query}`);
+        // API: /api/file/path/to/file.txt
+        const endpoint = `/api/file/${encodeURIComponent(path)}`;
+        return this.request<FileResult>(endpoint);
     }
 
     static async writeFile(path: string, content: string): Promise<WriteResult> {
@@ -41,7 +43,8 @@ export class FileApi {
     }
 
     static async deleteFile(path: string): Promise<WriteResult> {
-        const query = `?path=${encodeURIComponent(path)}`;
-        return this.request<WriteResult>(`/api/file${query}`, 'DELETE');
+        // API: /api/file/path/to/file.txt
+        const endpoint = `/api/file/${encodeURIComponent(path)}`;
+        return this.request<WriteResult>(endpoint, 'DELETE');
     }
 }
