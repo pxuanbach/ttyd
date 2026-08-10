@@ -1,18 +1,55 @@
+// Import file explorer styles
+@import '../components/fileExplorer/styles';
+
+* {
+  box-sizing: border-box;
+}
+
 html,
 body {
   height: 100%;
   min-height: 100%;
   margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+#app-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
-#terminal-container {
-  width: auto;
+#terminal-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-right: 0;
+  transition: margin-right 0.3s ease;
   height: 100%;
-  margin: 0 auto;
+
+  &.file-explorer-open {
+    margin-right: 280px;
+  }
+}
+
+#terminal-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
   padding: 0;
+  overflow: hidden;
+
   .terminal {
-    padding: 5px;
-    height: calc(100% - 10px);
+    padding: 0;
+    height: 100%;
+    width: 100%;
+  }
+
+  .xterm-viewport {
+    overflow: hidden !important;
   }
 }

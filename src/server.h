@@ -34,6 +34,11 @@ struct pss_http {
   char *buffer;
   char *ptr;
   size_t len;
+
+  // For POST body collection
+  char *body;
+  size_t body_len;
+  size_t body_pos;
 };
 
 struct pss_tty {
