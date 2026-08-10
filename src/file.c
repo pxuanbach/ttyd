@@ -7,11 +7,24 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include "file.h"
 #include "server.h"
 #include "utils.h"
+
+#ifdef _WIN32
+// Windows replacement for realpath
+static char *win_realpath(const char *path, char *resolved) {
+    if (_fullpath(resolved, path, _MAX_PATH) != NULL) {
+        return resolved;
+    }
+    return NULL;
+}
+#define realpath win_realpath
+#endif
 
 #define MAX_FILE_SIZE (10 * 1024 * 1024)  // 10MB limit
 #define MAX_ENTRIES 1000
