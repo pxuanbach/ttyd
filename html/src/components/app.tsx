@@ -1,6 +1,7 @@
 import { h, Component } from 'preact';
 
 import { Terminal } from './terminal';
+import { FileExplorer } from './fileExplorer';
 
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import type { ClientOptions, FlowControl } from './terminal/xterm';
@@ -52,17 +53,39 @@ const flowControl = {
     lowWater: 4,
 } as FlowControl;
 
-export class App extends Component {
-    render() {
+interface State {
+    fileExplorerOpen: boolean;
+}
+
+export class App extends Component<{}, State> {
+    constructor(props: {}) {
+        super(props);
+        this.state = {
+            fileExplorerOpen: false,
+        };
+    }
+
+    toggleFileExplorer = () => {
+        this.setState(prev => ({
+            fileExplorerOpen: !prev.fileExplorerOpen,
+        }));
+    };
+
+    render(_props: {}, { fileExplorerOpen }: State) {
         return (
-            <Terminal
-                id="terminal-container"
-                wsUrl={wsUrl}
-                tokenUrl={tokenUrl}
-                clientOptions={clientOptions}
-                termOptions={termOptions}
-                flowControl={flowControl}
-            />
+            <div id="app-container">
+                <FileExplorer isOpen={fileExplorerOpen} onToggle={this.toggleFileExplorer} />
+                <div id="terminal-wrapper" class={fileExplorerOpen ? 'file-explorer-open' : ''}>
+                    <Terminal
+                        id="terminal-container"
+                        wsUrl={wsUrl}
+                        tokenUrl={tokenUrl}
+                        clientOptions={clientOptions}
+                        termOptions={termOptions}
+                        flowControl={flowControl}
+                    />
+                </div>
+            </div>
         );
     }
 }
