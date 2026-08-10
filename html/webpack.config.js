@@ -33,6 +33,11 @@ const baseConfig = {
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        alias: {
+            react: 'preact/compat',
+            'react-dom': 'preact/compat',
+            'react/jsx-runtime': 'preact/jsx-runtime',
+        },
     },
     plugins: [
         new ESLintPlugin({
@@ -76,7 +81,7 @@ const devConfig = {
         proxy: [
             {
                 context: ['/token', '/ws'],
-                target: 'http://localhost:7681',
+                target: 'http://localhost:8090',
                 ws: true,
             },
         ],

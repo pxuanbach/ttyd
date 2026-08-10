@@ -201,6 +201,12 @@ export class Xterm {
         );
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+        register(
+            addEventListener(window, 'fileExplorerResize', () => {
+                // Delay to ensure DOM has updated
+                requestAnimationFrame(() => fitAddon.fit());
+            })
+        );
     }
 
     @bind

@@ -1,4 +1,5 @@
-import { h, Component } from 'preact';
+import { h, Component, Fragment } from 'preact';
+import { Panel, Group, Separator } from 'react-resizable-panels';
 
 import { Terminal } from './terminal';
 import { FileExplorer } from './fileExplorer';
@@ -74,17 +75,42 @@ export class App extends Component<{}, State> {
     render(_props: {}, { fileExplorerOpen }: State) {
         return (
             <div id="app-container">
-                <FileExplorer isOpen={fileExplorerOpen} onToggle={this.toggleFileExplorer} />
-                <div id="terminal-wrapper" class={fileExplorerOpen ? 'file-explorer-open' : ''}>
-                    <Terminal
-                        id="terminal-container"
-                        wsUrl={wsUrl}
-                        tokenUrl={tokenUrl}
-                        clientOptions={clientOptions}
-                        termOptions={termOptions}
-                        flowControl={flowControl}
-                    />
-                </div>
+                {!fileExplorerOpen && (
+                    <button
+                        class="file-explorer-toggle closed"
+                        onClick={this.toggleFileExplorer}
+                        title="Open File Explorer"
+                    >
+                        📁
+                    </button>
+                )}
+                <Group orientation="horizontal" id="main-panel-group">
+                    <Panel id="terminal-panel" defaultSize={fileExplorerOpen ? '70' : '100'} minSize="20">
+                        <Terminal
+                            id="terminal-container"
+                            wsUrl={wsUrl}
+                            tokenUrl={tokenUrl}
+                            clientOptions={clientOptions}
+                            termOptions={termOptions}
+                            flowControl={flowControl}
+                        />
+                    </Panel>
+
+                    {fileExplorerOpen && (
+                        <Fragment>
+                            <Separator id="sidebar-resize-handle" className="resize-handle horizontal" />
+                            <Panel
+                                id="file-explorer-panel"
+                                defaultSize="30"
+                                minSize="10"
+                                maxSize="70"
+                                storageKey="ttyd-file-explorer-width"
+                            >
+                                <FileExplorer isOpen={fileExplorerOpen} onToggle={this.toggleFileExplorer} />
+                            </Panel>
+                        </Fragment>
+                    )}
+                </Group>
             </div>
         );
     }

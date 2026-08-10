@@ -132,7 +132,7 @@ export class FileEditor extends Component<Props, State> {
                         <div
                             key={tab.path}
                             class={`editor-panel ${activeTab === tab.path ? 'active' : ''}`}
-                            style={{ display: activeTab === tab.path ? 'block' : 'none' }}
+                            style={{ display: activeTab === tab.path ? 'flex' : 'none' }}
                         >
                             <div class="editor-toolbar">
                                 <span class="editor-filename">{tab.path}</span>

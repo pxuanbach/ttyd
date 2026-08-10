@@ -41,11 +41,7 @@ $accent-color: #007acc;
 }
 
 .file-explorer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: $sidebar-width;
+  height: 100%;
   background: $bg-primary;
   border-left: 1px solid $border-color;
   display: flex;
@@ -119,9 +115,7 @@ $accent-color: #007acc;
     }
 
     .resize-handle {
-      height: 8px;
       background: $border-color;
-      cursor: ns-resize;
       flex-shrink: 0;
       transition: background-color 0.2s;
       position: relative;
@@ -130,19 +124,42 @@ $accent-color: #007acc;
       align-items: center;
       justify-content: center;
 
-      // Grip dots indicator
-      &::before {
-        content: '';
-        width: 30px;
-        height: 3px;
-        background: repeating-linear-gradient(
-          90deg,
-          $text-secondary 0px,
-          $text-secondary 2px,
-          transparent 2px,
-          transparent 4px
-        );
-        border-radius: 1px;
+      &.horizontal {
+        width: 8px;
+        cursor: ew-resize;
+        
+        &::before {
+          content: '';
+          width: 3px;
+          height: 30px;
+          background: repeating-linear-gradient(
+            0deg,
+            $text-secondary 0px,
+            $text-secondary 2px,
+            transparent 2px,
+            transparent 4px
+          );
+          border-radius: 1px;
+        }
+      }
+
+      &.vertical {
+        height: 8px;
+        cursor: ns-resize;
+        
+        &::before {
+          content: '';
+          width: 30px;
+          height: 3px;
+          background: repeating-linear-gradient(
+            90deg,
+            $text-secondary 0px,
+            $text-secondary 2px,
+            transparent 2px,
+            transparent 4px
+          );
+          border-radius: 1px;
+        }
       }
 
       &:hover, &.dragging {
@@ -154,17 +171,109 @@ $accent-color: #007acc;
     }
 
     .explorer-editor {
+      height: 100%;
       flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
       border-top: 1px solid $border-color;
-      min-height: $min-editor-height;
-      max-height: $max-editor-height;
-      
+      min-height: 0;  // Important for flex children
+
       .file-editor {
         flex: 1;
         min-height: 0;  // Important for flex children
+      }
+    }
+  }
+}
+
+// Resizable Panel Styles
+[data-panel] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+[data-panel-group] {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+
+  &[data-orientation="vertical"] {
+    flex-direction: column;
+  }
+
+  &[data-orientation="horizontal"] {
+    flex-direction: row;
+  }
+}
+
+[data-separator] {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  background: $border-color;
+
+  &:hover,
+  &[data-separator-active] {
+    background: $accent-color;
+  }
+
+  // Horizontal separator (vertical resize handle) - used for sidebar width
+  &[data-separator-direction="horizontal"] {
+    width: 8px;
+    cursor: ew-resize;
+    
+    &::before {
+      content: '';
+      width: 3px;
+      height: 30px;
+      background: repeating-linear-gradient(
+        0deg,
+        $text-secondary 0px,
+        $text-secondary 2px,
+        transparent 2px,
+        transparent 4px
+      );
+      border-radius: 1px;
+    }
+
+    &:hover,
+    &[data-separator-active] {
+      &::before {
+        background: white;
+      }
+    }
+  }
+
+  // Vertical separator (horizontal resize handle) - used for editor height
+  &[data-separator-direction="vertical"] {
+    height: 8px;
+    cursor: ns-resize;
+    
+    &::before {
+      content: '';
+      width: 30px;
+      height: 3px;
+      background: repeating-linear-gradient(
+        90deg,
+        $text-secondary 0px,
+        $text-secondary 2px,
+        transparent 2px,
+        transparent 4px
+      );
+      border-radius: 1px;
+    }
+
+    &:hover,
+    &[data-separator-active] {
+      &::before {
+        background: white;
       }
     }
   }
@@ -219,7 +328,7 @@ $accent-color: #007acc;
     overflow: auto;
     scrollbar-width: thin;  // Firefox
     -ms-overflow-style: none;  // IE/Edge
-    
+
     &::-webkit-scrollbar {
       width: 4px;
     }
@@ -358,7 +467,7 @@ $accent-color: #007acc;
       overflow-x: auto;
       scrollbar-width: none;  // Firefox
       -ms-overflow-style: none;  // IE/Edge
-      
+
       &::-webkit-scrollbar {
         display: none;  // Chrome/Safari
       }
@@ -520,8 +629,12 @@ $accent-color: #007acc;
   }
 
   .editor-textarea {
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    align-self: stretch;
     padding: 8px;
+    box-sizing: border-box;
     background: $bg-primary;
     border: none;
     color: $text-primary;
@@ -533,7 +646,7 @@ $accent-color: #007acc;
     overflow: auto;
     scrollbar-width: none;  // Firefox
     -ms-overflow-style: none;  // IE/Edge
-    
+
     &::-webkit-scrollbar {
       display: none;  // Chrome/Safari
     }

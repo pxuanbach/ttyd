@@ -7,7 +7,8 @@
         "jsxPragma": "h"
       },
       "rules": {
-        "@typescript-eslint/no-duplicate-enum-values": "off"
+        "@typescript-eslint/no-duplicate-enum-values": "off",
+        "n/no-unsupported-features/node-builtins": "off"
       }
     },
     {

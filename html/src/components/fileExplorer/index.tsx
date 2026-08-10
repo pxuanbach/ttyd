@@ -1,8 +1,11 @@
 import { h, Component, Fragment } from 'preact';
+import { Panel, Group, Separator } from 'react-resizable-panels';
 import { DirectoryTree } from './DirectoryTree';
 import { FileEditor } from './FileEditor';
 import { FileEntry, OpenTab } from './types';
 import { FileApi } from './api';
+
+const EDITOR_STORAGE_KEY = 'ttyd-file-editor-height';
 
 interface Props {
     isOpen: boolean;
@@ -13,55 +16,17 @@ interface State {
     activeTab: string | null;
     tabs: OpenTab[];
     showEditor: boolean;
-    editorHeight: number;
-    isResizing: boolean;
 }
 
 export class FileExplorer extends Component<Props, State> {
-    private resizeStartY: number = 0;
-    private resizeStartHeight: number = 250;
-
     constructor(props: Props) {
         super(props);
         this.state = {
             activeTab: null,
             tabs: [],
             showEditor: false,
-            editorHeight: 250,
-            isResizing: false,
         };
     }
-
-    componentDidMount() {
-        document.addEventListener('mousemove', this.handleMouseMove);
-        document.addEventListener('mouseup', this.handleMouseUp);
-    }
-
-    componentWillUnmount() {
-        document.removeEventListener('mousemove', this.handleMouseMove);
-        document.removeEventListener('mouseup', this.handleMouseUp);
-    }
-
-    handleMouseDown = (e: MouseEvent) => {
-        e.preventDefault();
-        this.resizeStartY = e.clientY;
-        this.resizeStartHeight = this.state.editorHeight;
-        this.setState({ isResizing: true });
-    };
-
-    handleMouseMove = (e: MouseEvent) => {
-        if (!this.state.isResizing) return;
-
-        const deltaY = this.resizeStartY - e.clientY;
-        const newHeight = Math.max(100, Math.min(this.resizeStartHeight + deltaY, window.innerHeight * 0.8));
-        this.setState({ editorHeight: newHeight });
-    };
-
-    handleMouseUp = () => {
-        if (this.state.isResizing) {
-            this.setState({ isResizing: false });
-        }
-    };
 
     handleOpenFile = async (entry: FileEntry) => {
         // Check if file is already open
@@ -181,12 +146,9 @@ export class FileExplorer extends Component<Props, State> {
         const { isOpen, onToggle } = this.props;
         const { tabs, activeTab, showEditor } = this.state;
 
+        // When not open, FileExplorer is not rendered (handled by parent App component)
         if (!isOpen) {
-            return (
-                <button class="file-explorer-toggle closed" onClick={onToggle} title="Open File Explorer">
-                    📁
-                </button>
-            );
+            return null;
         }
 
         return (
@@ -208,28 +170,41 @@ export class FileExplorer extends Component<Props, State> {
                 </div>
 
                 <div class="explorer-body">
-                    <div class="explorer-tree">
-                        <DirectoryTree onOpenFile={this.handleOpenFile} />
-                    </div>
-
-                    {tabs.length > 0 && showEditor && (
-                        <Fragment>
-                            <div
-                                class={`resize-handle ${this.state.isResizing ? 'dragging' : ''}`}
-                                onMouseDown={this.handleMouseDown}
-                            />
-                            <div class="explorer-editor" style={{ height: `${this.state.editorHeight}px` }}>
-                                <FileEditor
-                                    tabs={tabs}
-                                    activeTab={activeTab}
-                                    onSelectTab={this.handleSelectTab}
-                                    onCloseTab={this.handleCloseTab}
-                                    onTabContentChange={this.handleTabContentChange}
-                                    onOpenFile={this.handleOpenFile}
-                                />
+                    <Group orientation="vertical" id="editor-panel-group">
+                        <Panel
+                            id="directory-tree-panel"
+                            defaultSize={showEditor && tabs.length > 0 ? '50' : '100'}
+                            minSize="20"
+                        >
+                            <div class="explorer-tree">
+                                <DirectoryTree onOpenFile={this.handleOpenFile} />
                             </div>
-                        </Fragment>
-                    )}
+                        </Panel>
+
+                        {tabs.length > 0 && showEditor && (
+                            <Fragment>
+                                <Separator id="editor-resize-handle" className="resize-handle vertical" />
+                                <Panel
+                                    id="file-editor-panel"
+                                    defaultSize="50"
+                                    minSize="15"
+                                    maxSize="70"
+                                    storageKey={EDITOR_STORAGE_KEY}
+                                >
+                                    <div class="explorer-editor">
+                                        <FileEditor
+                                            tabs={tabs}
+                                            activeTab={activeTab}
+                                            onSelectTab={this.handleSelectTab}
+                                            onCloseTab={this.handleCloseTab}
+                                            onTabContentChange={this.handleTabContentChange}
+                                            onOpenFile={this.handleOpenFile}
+                                        />
+                                    </div>
+                                </Panel>
+                            </Fragment>
+                        )}
+                    </Group>
                 </div>
             </div>
         );

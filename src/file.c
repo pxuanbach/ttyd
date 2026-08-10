@@ -1,5 +1,7 @@
 #include <dirent.h>
 #include <errno.h>
+
+#include "compat.h"
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
