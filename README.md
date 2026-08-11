@@ -29,6 +29,17 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 
 - Install with [Homebrew](http://brew.sh): `brew install ttyd`
 - Install with [MacPorts](https://www.macports.org): `sudo port install ttyd`
+- Download and install via command line:
+  ```bash
+  # Download latest release
+  version="1.7.8"
+  curl -L "https://github.com/pxuanbach/ttyd/releases/download/v${version}/ttyd-${version}-macos-x64.tar.gz" -o ttyd.tar.gz
+  # Extract and install
+  tar -xzf ttyd.tar.gz
+  mv ttyd /usr/local/bin/
+  # Cleanup
+  rm ttyd.tar.gz
+  ```
 
 ## Install on Linux
 
@@ -38,6 +49,17 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - Install on Gentoo: clone the [repo](https://bitbucket.org/mgpagano/ttyd/src/master) and follow the directions [here](https://wiki.gentoo.org/wiki/Custom_repository#Creating_a_local_repository).
 - Install with [Homebrew](https://docs.brew.sh/Homebrew-on-Linux) : `brew install ttyd`
 - Precompiled static binaries: download from the [releases](https://github.com/tsl0922/ttyd/releases) page
+- Download and install via command line:
+  ```bash
+  # Download latest release
+  version="1.7.8"
+  curl -L "https://github.com/pxuanbach/ttyd/releases/download/v${version}/ttyd-${version}-linux-x64.tar.gz" -o ttyd.tar.gz
+  # Extract and install
+  tar -xzf ttyd.tar.gz
+  sudo mv ttyd /usr/local/bin/
+  # Cleanup
+  rm ttyd.tar.gz
+  ```
 
 ## Install on Windows
 
@@ -45,6 +67,17 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - Install with [WinGet](https://github.com/microsoft/winget-cli): `winget install tsl0922.ttyd`
 - Install with [Scoop](https://scoop.sh/#/apps?q=ttyd&s=2&d=1&o=true): `scoop install ttyd`
 - [Compile on Windows](https://github.com/tsl0922/ttyd/wiki/Compile-on-Windows)
+- Download and install via command line:
+  ```powershell
+  # Download latest release
+  $version = "1.7.8"
+  $url = "https://github.com/pxuanbach/ttyd/releases/download/v$version/ttyd-$version-win-x64.zip"
+  Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\ttyd.zip"
+  # Install to user directory
+  Expand-Archive -Path "$env:TEMP\ttyd.zip" -DestinationPath "$env:LOCALAPPDATA\ttyd" -Force
+  # Add to PATH (optional)
+  $env:PATH = "$env:LOCALAPPDATA\ttyd;$env:PATH"
+  ```
 
 # Usage
 
