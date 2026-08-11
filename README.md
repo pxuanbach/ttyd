@@ -21,6 +21,7 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - Run any custom command with options
 - Basic authentication support and many other custom options
 - Cross platform: macOS, Linux, FreeBSD/OpenBSD, [OpenWrt](https://openwrt.org), Windows
+- File Explorer sidebar with integrated text editor for browsing and editing local files
 
 # Installation
 
