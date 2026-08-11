@@ -99,3 +99,4 @@ coverage/
 # Project specific
 init.d
 .pi-subagents
+winget-pkgs
