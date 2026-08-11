@@ -45,16 +45,16 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - Install with [WinGet](https://github.com/microsoft/winget-cli): `winget install tsl0922.ttyd`
 - Install with [Scoop](https://scoop.sh/#/apps?q=ttyd&s=2&d=1&o=true): `scoop install ttyd`
 - [Compile on Windows](https://github.com/tsl0922/ttyd/wiki/Compile-on-Windows)
-- Download and install via command line:
+- Quick install (run in PowerShell):
   ```powershell
-  # Download latest release
-  $version = "1.7.8"
-  $url = "https://github.com/pxuanbach/ttyd/releases/download/v$version/ttyd-$version-win-x64.zip"
-  Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\ttyd.zip"
-  # Install to user directory
-  Expand-Archive -Path "$env:TEMP\ttyd.zip" -DestinationPath "$env:LOCALAPPDATA\ttyd" -Force
-  # Add to PATH (optional)
-  $env:PATH = "$env:LOCALAPPDATA\ttyd;$env:PATH"
+  # One-liner - download and install
+  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex"
+
+  # With PATH update
+  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -AddToPath"
+
+  # Uninstall
+  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -Uninstall"
   ```
 - Build from source (Linux/macOS):
   ```bash
