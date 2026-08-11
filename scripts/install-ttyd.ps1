@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Repo = "pxuanbach/ttyd"
-$ZipName = "ttyd-$Version-win-x64.zip"
+$ZipName = "ttyd-win.x64.zip"
 $Url = "https://github.com/$Repo/releases/download/v$Version/$ZipName"
 $ZipPath = "$env:TEMP\$ZipName"
 
