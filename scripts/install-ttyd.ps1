@@ -4,7 +4,7 @@
 param(
     [string]$Version = "1.7.8",
     [string]$InstallDir = "$env:LOCALAPPDATA\ttyd",
-    [switch]$AddToPath,
+    [switch]$NoPath,
     [switch]$Uninstall
 )
 
@@ -34,7 +34,7 @@ function Install-Ttyd {
     Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
     Remove-Item $ZipPath -Force
 
-    if ($AddToPath) {
+    if (-not $NoPath) {
         $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
         if ($currentPath -notlike "*$InstallDir*") {
             [Environment]::SetEnvironmentVariable("PATH", "$InstallDir;$currentPath", "User")

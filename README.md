@@ -47,11 +47,11 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - [Compile on Windows](https://github.com/tsl0922/ttyd/wiki/Compile-on-Windows)
 - Quick install (run in PowerShell):
   ```powershell
-  # One-liner - download and install
+  # Install (adds to PATH automatically)
   powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex"
 
-  # With PATH update
-  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -AddToPath"
+  # Install without adding to PATH
+  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -NoPath"
 
   # Uninstall
   powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -Uninstall"
