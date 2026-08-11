@@ -29,17 +29,6 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 
 - Install with [Homebrew](http://brew.sh): `brew install ttyd`
 - Install with [MacPorts](https://www.macports.org): `sudo port install ttyd`
-- Download and install via command line:
-  ```bash
-  # Download latest release
-  version="1.7.8"
-  curl -L "https://github.com/pxuanbach/ttyd/releases/download/v${version}/ttyd-${version}-macos-x64.tar.gz" -o ttyd.tar.gz
-  # Extract and install
-  tar -xzf ttyd.tar.gz
-  mv ttyd /usr/local/bin/
-  # Cleanup
-  rm ttyd.tar.gz
-  ```
 
 ## Install on Linux
 
@@ -49,17 +38,6 @@ ttyd is a simple command-line tool for sharing terminal over the web.
 - Install on Gentoo: clone the [repo](https://bitbucket.org/mgpagano/ttyd/src/master) and follow the directions [here](https://wiki.gentoo.org/wiki/Custom_repository#Creating_a_local_repository).
 - Install with [Homebrew](https://docs.brew.sh/Homebrew-on-Linux) : `brew install ttyd`
 - Precompiled static binaries: download from the [releases](https://github.com/tsl0922/ttyd/releases) page
-- Download and install via command line:
-  ```bash
-  # Download latest release
-  version="1.7.8"
-  curl -L "https://github.com/pxuanbach/ttyd/releases/download/v${version}/ttyd-${version}-linux-x64.tar.gz" -o ttyd.tar.gz
-  # Extract and install
-  tar -xzf ttyd.tar.gz
-  sudo mv ttyd /usr/local/bin/
-  # Cleanup
-  rm ttyd.tar.gz
-  ```
 
 ## Install on Windows
 
