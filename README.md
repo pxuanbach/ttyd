@@ -56,6 +56,21 @@ ttyd is a simple command-line tool for sharing terminal over the web.
   # Add to PATH (optional)
   $env:PATH = "$env:LOCALAPPDATA\ttyd;$env:PATH"
   ```
+- Build from source (Linux/macOS):
+  ```bash
+  # Install dependencies
+  # Ubuntu/Debian: sudo apt install libuv1-dev libwebsockets-dev libssl-dev libjson-c-dev zlib1g-dev cmake gcc g++ make
+  # macOS: brew install cmake openssl json-c zlib
+
+  # Clone and build
+  git clone https://github.com/pxuanbach/ttyd.git
+  cd ttyd
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build --config Release
+
+  # Run
+  ./build/ttyd -p 8080 bash
+  ```
 
 # Usage
 
