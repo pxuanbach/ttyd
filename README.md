@@ -56,6 +56,17 @@ ttyd is a simple command-line tool for sharing terminal over the web.
   # Uninstall
   powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -Uninstall"
   ```
+
+## Quick Start
+
+```powershell
+# Windows
+ttyd -p 8080 powershell
+
+# Linux/macOS
+./ttyd -p 8080 bash
+```
+
 - Build from source (Linux/macOS):
   ```bash
   # Install dependencies

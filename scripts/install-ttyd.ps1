@@ -45,7 +45,10 @@ function Install-Ttyd {
 
     Write-Host "`nInstallation complete!" -ForegroundColor Green
     Write-Host "ttyd installed at: $InstallDir\ttyd.exe" -ForegroundColor White
-    Write-Host "`nRun: ttyd.exe -p 8080" -ForegroundColor Yellow
+    Write-Host "`nUsage:" -ForegroundColor Cyan
+    Write-Host "  ttyd.exe -p 8080 powershell" -ForegroundColor Yellow
+    Write-Host "  ttyd.exe -p 8080 cmd" -ForegroundColor Yellow
+    Write-Host "  ttyd.exe -p 8080 bash" -ForegroundColor Yellow
 }
 
 function Uninstall-Ttyd {
