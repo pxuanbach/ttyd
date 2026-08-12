@@ -17,4 +17,11 @@
 #endif
 #endif
 
+// O_BINARY is MSVC/Windows-only (forces raw binary mode for open()).
+// On POSIX systems the flag is unnecessary; default it to 0 so existing
+// code that uses O_BINARY unconditionally compiles everywhere.
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 #endif /* TTYD_COMPAT_H */
