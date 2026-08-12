@@ -2,7 +2,7 @@
 # Run: powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex"
 
 param(
-    [string]$Version = "1.7.8",
+    [string]$Version = "1.7.9",
     [string]$InstallDir = "$env:LOCALAPPDATA\ttyd",
     [switch]$NoPath,
     [switch]$Uninstall
@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Repo = "pxuanbach/ttyd"
-$ZipName = "ttyd-win.x64.zip"
+$ZipName = "ttyd-v$Version-win-x64.zip"
 $Url = "https://github.com/$Repo/releases/download/v$Version/$ZipName"
 $ZipPath = "$env:TEMP\$ZipName"
 

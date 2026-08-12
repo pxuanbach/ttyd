@@ -1,9 +1,9 @@
-PackageVersion: 1.7.8
+PackageVersion: 1.7.9
 Scope: user
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/pxuanbach/ttyd/releases/download/v1.7.8/ttyd-1.7.8-win-x64.zip
-    InstallerSha256: 11FB0B5D4D7A64907162567077FF1C1730D89B6A0863C111B196A969DC126402
+    InstallerUrl: https://github.com/pxuanbach/ttyd/releases/download/v1.7.9/ttyd-v1.7.9-win-x64.zip
+    InstallerSha256: 13AFFEA52B75508ACC490A11397A0AE59ADD908D92A6E5E899291FB8F693A00C
     NestedInstallerType: portable
     NestedInstallerPath: ttyd.exe
     InstallerType: zip
