@@ -81,11 +81,13 @@ static const struct option options[] = {{"port", required_argument, NULL, 'p'},
                                         {"once", no_argument, NULL, 'o'},
                                         {"exit-no-conn", no_argument, NULL, 'q'},
                                         {"browser", no_argument, NULL, 'B'},
+                                        {"upload-enabled", no_argument, NULL, '1'},
+                                        {"upload-max-size", required_argument, NULL, '2'},
                                         {"debug", required_argument, NULL, 'd'},
                                         {"version", no_argument, NULL, 'v'},
                                         {"help", no_argument, NULL, 'h'},
                                         {NULL, 0, 0, 0}};
-static const char *opt_string = "p:i:U:c:H:u:g:s:w:I:b:P:f:6aSC:K:A:Wt:T:Om:oqBd:vh";
+static const char *opt_string = "p:i:U:c:H:u:g:s:w:I:b:P:f:6aSC:K:A:Wt:T:Om:oqB12d:vh";
 
 static void print_help() {
   // clang-format off
@@ -113,6 +115,8 @@ static void print_help() {
           "    -o, --once              Accept only one client and exit on disconnection\n"
           "    -q, --exit-no-conn      Exit on all clients disconnection\n"
           "    -B, --browser           Open terminal with the default system browser\n"
+          "    --upload-enabled        Enable file upload via right-click (default: enabled)\n"
+          "    --upload-max-size       Maximum file upload size (default: 100M, format: 100M, 1G)\n"
           "    -I, --index             Custom index.html path\n"
           "    -b, --base-path         Expected base path for requests coming from a reverse proxy (eg: /mounted/here, max length: 128)\n"
 #if LWS_LIBRARY_VERSION_NUMBER >= 4000000
@@ -159,6 +163,8 @@ static void print_config() {
   if (server->index != NULL) lwsl_notice("  custom index.html: %s\n", server->index);
   if (server->cwd != NULL) lwsl_notice("  working directory: %s\n", server->cwd);
   if (!server->writable) lwsl_warn("The --writable option is not set, will start in readonly mode\n");
+  if (server->upload_enabled) lwsl_notice("  file upload: enabled (max size: %zu bytes)\n", server->upload_max_size);
+  else lwsl_notice("  file upload: disabled\n");
 }
 
 static struct server *server_new(int argc, char **argv, int start) {
@@ -172,6 +178,8 @@ static struct server *server_new(int argc, char **argv, int start) {
   ts->sig_code = SIGHUP;
   snprintf(ts->terminal_type, sizeof(ts->terminal_type), "%s", "xterm-256color");
   get_sig_name(ts->sig_code, ts->sig_name, sizeof(ts->sig_name));
+  ts->upload_enabled = true;  // File upload enabled by default
+  ts->upload_max_size = 100 * 1024 * 1024;  // 100MB default
   if (start == argc) return ts;
 
   int cmd_argc = argc - start;
@@ -379,6 +387,17 @@ int main(int argc, char **argv) {
       case 'B':
         browser = true;
         break;
+      case '1':
+        server->upload_enabled = true;
+        break;
+      case '2': {
+        size_t max_size = parse_size(optarg);
+        if (max_size == 0) {
+          fprintf(stderr, "ttyd: invalid upload-max-size: %s\n", optarg);
+          return -1;
+        }
+        server->upload_max_size = max_size;
+      } break;
       case 'p':
         info.port = parse_int("port", optarg);
         if (info.port < 0) {

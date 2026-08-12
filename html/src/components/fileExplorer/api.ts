@@ -1,4 +1,4 @@
-import { DirectoryResult, FileResult, WriteResult, isFileError } from './types';
+import { DirectoryResult, FileResult, WriteResult, UploadResult, UploadProgress, isFileError } from './types';
 
 const basePath = window.location.pathname.replace(/[/]+$/, '');
 
@@ -46,5 +46,78 @@ export class FileApi {
         // API: /api/file/path/to/file.txt
         const endpoint = `/api/file/${encodeURIComponent(path)}`;
         return this.request<WriteResult>(endpoint, 'DELETE');
+    }
+
+    /**
+     * Upload a file to the specified target directory.
+     * Uses XHR for progress tracking.
+     * @param targetPath - The directory path to upload to
+     * @param file - The file to upload
+     * @param onProgress - Optional callback for upload progress
+     * @returns UploadResult with the uploaded file path and size
+     */
+    static uploadFile(
+        targetPath: string,
+        file: File,
+        onProgress?: (progress: UploadProgress) => void
+    ): Promise<UploadResult> {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const formData = new FormData();
+
+            // URL: /api/upload?path=<encoded_target_path>
+            const url = `${basePath}/api/upload?path=${encodeURIComponent(targetPath)}`;
+
+            xhr.open('POST', url, true);
+
+            // Progress handler
+            if (onProgress) {
+                xhr.upload.onprogress = e => {
+                    if (e.lengthComputable) {
+                        onProgress({
+                            loaded: e.loaded,
+                            total: e.total,
+                            percent: Math.round((e.loaded / e.total) * 100),
+                        });
+                    }
+                };
+            }
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.success) {
+                            resolve(data as UploadResult);
+                        } else {
+                            reject(new Error(data.error || 'Upload failed'));
+                        }
+                    } catch {
+                        reject(new Error('Invalid response from server'));
+                    }
+                } else {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        reject(new Error(data.error || `Upload failed with status ${xhr.status}`));
+                    } catch {
+                        reject(new Error(`Upload failed with status ${xhr.status}`));
+                    }
+                }
+            };
+
+            xhr.onerror = () => {
+                reject(new Error('Network error during upload'));
+            };
+
+            xhr.onabort = () => {
+                reject(new Error('Upload cancelled'));
+            };
+
+            // Add the file to form data with the field name 'file'
+            formData.append('file', file);
+
+            // Send the request
+            xhr.send(formData);
+        });
     }
 }

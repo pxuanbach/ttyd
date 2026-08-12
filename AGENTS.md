@@ -223,3 +223,50 @@ cmake --build build
 ```
 
 **Windows note**: On Windows, use `powershell` (or `cmd`) as the command - `bash` exits immediately with code 1 because it's a WSL/bash process that cannot run in a PTY.
+
+---
+
+## FILE UPLOAD FEATURE (LAN)
+
+### Overview
+Right-click on any folder in the File Explorer to upload files to that directory.
+
+### New CLI Flags
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--upload-enabled` | true | Enable/disable file upload feature |
+| `--upload-max-size` | 100M | Maximum file upload size (e.g., 100M, 1G) |
+
+### New API Endpoints
+| Method | Endpoint | Handler | Purpose |
+|--------|----------|---------|---------|
+| POST | `/api/upload?path=/dir` | `handle_api_upload()` | Upload file via multipart form |
+| GET | `/api/directory/*` | `handle_api_directory()` | List directory contents |
+| GET | `/api/file/*` | `handle_api_file_get()` | Read file content |
+| POST | `/api/file` | `handle_api_file_post()` | Create/update file |
+| DELETE | `/api/file/*` | `handle_api_file_delete()` | Delete file |
+
+### Upload Flow
+1. User right-clicks folder in File Explorer
+2. Selects "Upload Files" from context menu
+3. File picker opens
+4. User selects file(s)
+5. Files uploaded via `POST /api/upload`
+6. Toast notification shows success/failure
+7. Directory automatically refreshes
+
+### Auto-rename Behavior
+If a file with the same name exists:
+- `file.txt` becomes `file (1).txt`
+- `file (2).txt` becomes `file (3).txt`
+- Up to 99,999 duplicates supported
+
+### Security
+- Path traversal prevention via `is_path_safe()`
+- Size limit enforced (default 100MB)
+- No authentication required (relies on VPN/LAN access)
+- Files restricted to working directory (`-w` flag path)
+
+### New Components
+- `ContextMenu.tsx` - Right-click context menu with upload option
+- `Toast.tsx` - Toast notification system for upload feedback

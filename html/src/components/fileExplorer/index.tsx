@@ -2,7 +2,8 @@ import { h, Component, Fragment } from 'preact';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import { DirectoryTree } from './DirectoryTree';
 import { FileEditor } from './FileEditor';
-import { FileEntry, OpenTab } from './types';
+import { ContextMenu, ContextMenuItem } from './ContextMenu';
+import { FileEntry, OpenTab, UploadProgress } from './types';
 import { FileApi } from './api';
 
 const EDITOR_STORAGE_KEY = 'ttyd-file-editor-height';
@@ -12,10 +13,18 @@ interface Props {
     onToggle: () => void;
 }
 
+interface ContextMenuState {
+    x: number;
+    y: number;
+    entry: FileEntry;
+}
+
 interface State {
     activeTab: string | null;
     tabs: OpenTab[];
     showEditor: boolean;
+    contextMenu: ContextMenuState | null;
+    uploadProgress: UploadProgress | null;
 }
 
 export class FileExplorer extends Component<Props, State> {
@@ -25,6 +34,8 @@ export class FileExplorer extends Component<Props, State> {
             activeTab: null,
             tabs: [],
             showEditor: false,
+            contextMenu: null,
+            uploadProgress: null,
         };
     }
 
@@ -142,9 +153,188 @@ export class FileExplorer extends Component<Props, State> {
         window.dispatchEvent(event);
     };
 
+    handleContextMenu = (entry: FileEntry, x: number, y: number) => {
+        this.setState({
+            contextMenu: { x, y, entry },
+        });
+    };
+
+    closeContextMenu = () => {
+        this.setState({ contextMenu: null });
+    };
+
+    handleContextMenuAction = async (action: string) => {
+        const { contextMenu } = this.state;
+        if (!contextMenu) return;
+
+        const { entry } = contextMenu;
+
+        switch (action) {
+            case 'upload':
+                this.handleUploadFiles(entry.path);
+                return; // handleUploadFiles handles closing context menu
+            case 'refresh':
+                // Trigger a refresh by reloading the current directory
+                // This will be handled by DirectoryTree
+                window.dispatchEvent(new CustomEvent('fileExplorerRefresh'));
+                break;
+            case 'newFile':
+                this.handleNewFile(entry.path);
+                break;
+            case 'newFolder':
+                this.handleNewFolder();
+                break;
+        }
+
+        this.closeContextMenu();
+    };
+
+    handleUploadFiles = (targetPath: string) => {
+        // Close context menu first
+        this.closeContextMenu();
+
+        // Use setTimeout to ensure context menu is fully closed before showing file picker
+        setTimeout(() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.style.display = 'none';
+
+            input.onchange = async () => {
+                const files = input.files;
+                if (!files || files.length === 0) {
+                    input.remove();
+                    return;
+                }
+
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const file of Array.from(files)) {
+                    try {
+                        await FileApi.uploadFile(targetPath, file, progress => {
+                            this.setState({ uploadProgress: progress });
+                        });
+                        successCount++;
+                    } catch (err) {
+                        console.error(`Failed to upload ${file.name}:`, err);
+                        failCount++;
+                    }
+                }
+
+                this.setState({ uploadProgress: null });
+
+                // Show result notification
+                if (successCount > 0 && failCount === 0) {
+                    window.dispatchEvent(
+                        new CustomEvent('showToast', {
+                            detail: { message: `Uploaded ${successCount} file(s) successfully`, type: 'success' },
+                        })
+                    );
+                } else if (successCount > 0 && failCount > 0) {
+                    window.dispatchEvent(
+                        new CustomEvent('showToast', {
+                            detail: { message: `Uploaded ${successCount} files, ${failCount} failed`, type: 'warning' },
+                        })
+                    );
+                } else if (failCount > 0) {
+                    window.dispatchEvent(
+                        new CustomEvent('showToast', {
+                            detail: { message: `Failed to upload ${failCount} file(s)`, type: 'error' },
+                        })
+                    );
+                }
+
+                // Refresh the directory to show new files
+                window.dispatchEvent(new CustomEvent('fileExplorerRefresh'));
+
+                // Clean up
+                input.remove();
+            };
+
+            input.oncancel = () => {
+                input.remove();
+            };
+
+            // Append to body and trigger file picker
+            document.body.appendChild(input);
+            input.click();
+        }, 0);
+    };
+
+    handleNewFile = async (dirPath: string) => {
+        const name = window.prompt('Enter file name:');
+        if (!name) return;
+
+        const filePath = dirPath.endsWith('/') ? `${dirPath}${name}` : `${dirPath}/${name}`;
+
+        try {
+            await FileApi.writeFile(filePath, '');
+            window.dispatchEvent(new CustomEvent('fileExplorerRefresh'));
+            window.dispatchEvent(
+                new CustomEvent('showToast', {
+                    detail: { message: `Created ${name}`, type: 'success' },
+                })
+            );
+        } catch (err) {
+            window.dispatchEvent(
+                new CustomEvent('showToast', {
+                    detail: {
+                        message: `Failed to create file: ${err instanceof Error ? err.message : err}`,
+                        type: 'error',
+                    },
+                })
+            );
+        }
+    };
+
+    handleNewFolder = async () => {
+        const name = window.prompt('Enter folder name:');
+        if (!name) return;
+
+        // For now, creating a folder would need a new API endpoint
+        // For simplicity, we'll just show a toast
+        window.dispatchEvent(
+            new CustomEvent('showToast', {
+                detail: { message: 'Creating folders via web UI is not yet implemented', type: 'info' },
+            })
+        );
+    };
+
+    getContextMenuItems = (entry: FileEntry): ContextMenuItem[] => {
+        const items: ContextMenuItem[] = [];
+
+        if (entry.isDirectory) {
+            items.push({
+                id: 'upload',
+                label: 'Upload Files',
+            });
+            items.push({ id: 'divider-upload', label: '', divider: true });
+        }
+
+        items.push({
+            id: 'newFile',
+            label: 'New File',
+        });
+
+        items.push({
+            id: 'newFolder',
+            label: 'New Folder',
+        });
+
+        items.push({ id: 'divider-refresh', label: '', divider: true });
+
+        items.push({
+            id: 'refresh',
+            label: 'Refresh',
+        });
+
+        return items;
+    };
+
     render() {
         const { isOpen, onToggle } = this.props;
-        const { tabs, activeTab, showEditor } = this.state;
+        const { tabs, activeTab, showEditor, contextMenu, uploadProgress } = this.state;
 
         // When not open, FileExplorer is not rendered (handled by parent App component)
         if (!isOpen) {
@@ -177,7 +367,10 @@ export class FileExplorer extends Component<Props, State> {
                             minSize="20"
                         >
                             <div class="explorer-tree">
-                                <DirectoryTree onOpenFile={this.handleOpenFile} />
+                                <DirectoryTree
+                                    onOpenFile={this.handleOpenFile}
+                                    onContextMenu={this.handleContextMenu}
+                                />
                             </div>
                         </Panel>
 
@@ -206,6 +399,25 @@ export class FileExplorer extends Component<Props, State> {
                         )}
                     </Group>
                 </div>
+
+                {/* Context Menu */}
+                {contextMenu && (
+                    <ContextMenu
+                        x={contextMenu.x}
+                        y={contextMenu.y}
+                        items={this.getContextMenuItems(contextMenu.entry)}
+                        onSelect={this.handleContextMenuAction}
+                        onClose={this.closeContextMenu}
+                    />
+                )}
+
+                {/* Upload Progress Indicator */}
+                {uploadProgress && (
+                    <div class="upload-progress">
+                        <div class="upload-progress__bar" style={{ width: `${uploadProgress.percent}%` }} />
+                        <span class="upload-progress__text">Uploading... {uploadProgress.percent}%</span>
+                    </div>
+                )}
             </div>
         );
     }

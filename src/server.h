@@ -31,6 +31,7 @@ extern struct endpoints endpoints;
 
 struct pss_http {
   char path[128];
+  char uri[256];  // Full URI including query string
   char *buffer;
   char *ptr;
   size_t len;
@@ -39,6 +40,11 @@ struct pss_http {
   char *body;
   size_t body_len;
   size_t body_pos;
+
+  // For pending response after BODY_COMPLETION
+  int pending_result;
+  char upload_response[512];  // Store upload response for delayed sending
+  size_t upload_response_len;
 };
 
 struct pss_tty {
@@ -86,6 +92,8 @@ struct server {
   bool exit_no_conn;       // whether exit on all clients disconnection
   char socket_path[255];   // UNIX domain socket path
   char terminal_type[30];  // terminal type to report
+  bool upload_enabled;     // whether file upload is enabled
+  size_t upload_max_size;  // maximum file upload size in bytes (default: 100MB)
 
   uv_loop_t *loop;         // the libuv event loop
 };

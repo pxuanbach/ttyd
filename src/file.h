@@ -33,6 +33,13 @@ typedef struct {
     char *error;
 } write_result_t;
 
+// Upload file result
+typedef struct {
+    char *path;        // final path where file was saved
+    size_t size;       // actual file size written
+    char *error;        // NULL on success
+} upload_result_t;
+
 // Path validation - check if path is safe and within allowed base
 bool is_path_safe(const char *base_path, const char *requested_path);
 
@@ -54,9 +61,14 @@ write_result_t *create_file(const char *path);
 // Delete file or empty directory
 write_result_t *delete_file(const char *path);
 
+// Upload file (binary) to target directory with auto-rename on conflict
+// Returns upload_result_t with final path and size, or error
+upload_result_t *upload_file(const char *dir, const char *filename, const char *data, size_t len);
+
 // Free results
 void dir_result_free(dir_result_t *result);
 void file_result_free(file_result_t *result);
 void write_result_free(write_result_t *result);
+void upload_result_free(upload_result_t *result);
 
 #endif  // TTYD_FILE_H

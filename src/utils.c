@@ -10,7 +10,10 @@
 #if !defined(_WIN32) && !defined(__CYGWIN__)
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#else
+#include <windows.h>
 #endif
 
 #if defined(__linux__) && !defined(__ANDROID__)
@@ -115,6 +118,95 @@ int open_uri(char *uri) {
   if (waitpid(pid, &status, 0) < 0) return 1;
   return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : 1;
 #endif
+}
+
+char *generate_unique_filename(const char *dir, const char *filename) {
+  // First, check if the original file exists
+  size_t dir_len = strlen(dir);
+  size_t filename_len = strlen(filename);
+  size_t max_path = dir_len + filename_len + 32;  // extra space for " (12345).ext"
+
+  char *filepath = xmalloc(max_path);
+  snprintf(filepath, max_path, "%s/%s", dir, filename);
+
+  struct stat st;
+  if (stat(filepath, &st) != 0) {
+    // File doesn't exist, return original path
+    return filepath;
+  }
+
+  // File exists, find a unique name
+  free(filepath);
+
+  // Split filename into name and extension
+  const char *dot = strrchr(filename, '.');
+  const char *ext_start = NULL;
+  const char *name_end = filename + filename_len;
+
+  if (dot != NULL && dot != filename) {
+    ext_start = dot + 1;
+    name_end = dot;
+  }
+
+  size_t name_part_len = name_end - filename;
+
+  // Try names like "file (1).txt", "file (2).txt", etc.
+  for (int i = 1; i <= 99999; i++) {
+    size_t needed = dir_len + 1 + name_part_len + 16 + (ext_start ? filename_len - name_part_len : 0) + 1;
+    filepath = xmalloc(needed);
+
+    if (ext_start != NULL) {
+      snprintf(filepath, needed, "%s/%.*s (%d).%s", dir, (int)name_part_len, filename, i, ext_start);
+    } else {
+      snprintf(filepath, needed, "%s/%.*s (%d)", dir, (int)name_part_len, filename, i);
+    }
+
+    if (stat(filepath, &st) != 0) {
+      // This name is available
+      return filepath;
+    }
+    free(filepath);
+  }
+
+  // Exhausted all reasonable names
+  return NULL;
+}
+
+size_t parse_size(const char *size_str) {
+  if (size_str == NULL || *size_str == '\0') {
+    return 0;
+  }
+
+  char *end;
+  long long value = strtoll(size_str, &end, 10);
+
+  if (value < 0) {
+    return 0;
+  }
+
+  size_t multiplier = 1;
+
+  if (*end != '\0') {
+    if (strcasecmp(end, "K") == 0 || strcasecmp(end, "KB") == 0) {
+      multiplier = 1024;
+    } else if (strcasecmp(end, "M") == 0 || strcasecmp(end, "MB") == 0) {
+      multiplier = 1024 * 1024;
+    } else if (strcasecmp(end, "G") == 0 || strcasecmp(end, "GB") == 0) {
+      multiplier = 1024 * 1024 * 1024;
+    } else if (strcasecmp(end, "B") == 0) {
+      multiplier = 1;
+    } else {
+      // Unknown suffix, treat as bytes
+      multiplier = 1;
+    }
+  }
+
+  // Check for overflow
+  if (value > ((size_t)-1) / multiplier) {
+    return (size_t)-1;
+  }
+
+  return (size_t)(value * multiplier);
 }
 
 #ifdef _WIN32

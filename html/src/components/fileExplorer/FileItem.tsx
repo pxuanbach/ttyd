@@ -9,6 +9,7 @@ interface Props {
     onToggle: (entry: FileEntry) => void;
     onSelect: (entry: FileEntry) => void;
     onOpen: (entry: FileEntry) => void;
+    onContextMenu?: (entry: FileEntry, x: number, y: number) => void;
 }
 
 export class FileItem extends Component<Props> {
@@ -33,6 +34,15 @@ export class FileItem extends Component<Props> {
         }
     };
 
+    handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const { entry, onContextMenu } = this.props;
+        if (onContextMenu) {
+            onContextMenu(entry, e.clientX, e.clientY);
+        }
+    };
+
     render() {
         const { entry, depth, isExpanded, isSelected } = this.props;
         const paddingLeft = depth * 16 + 8;
@@ -45,6 +55,7 @@ export class FileItem extends Component<Props> {
                 style={{ paddingLeft: `${paddingLeft}px` }}
                 onClick={this.handleClick}
                 onDblClick={this.handleDoubleClick}
+                onContextMenu={this.handleContextMenu}
                 title={entry.path}
             >
                 <span class="file-icon">{icon}</span>

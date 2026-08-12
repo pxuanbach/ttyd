@@ -1,6 +1,9 @@
 // Import file explorer styles
 @import '../components/fileExplorer/styles';
 
+// Import toast styles
+@import 'toast';
+
 * {
   box-sizing: border-box;
 }

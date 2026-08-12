@@ -50,9 +50,9 @@ static void build_full_path(const char *base_path, const char *relative_path, ch
         return;
     }
     
-    // Check if path is absolute (Unix / or Windows C:)
-    int is_absolute = (relative_path[0] == '/' || 
-                      (strlen(relative_path) >= 2 && relative_path[1] == ':'));
+    // Check if path is absolute (Windows C: style only)
+    // Note: Unix-style paths like /test_subdir are treated as relative on Windows
+    int is_absolute = (strlen(relative_path) >= 2 && relative_path[1] == ':');  // C: style
     
     if (is_absolute) {
         snprintf(full_path, size, "%s", relative_path);
@@ -109,14 +109,14 @@ bool is_path_safe(const char *base_path, const char *requested_path) {
     // Build full path first, then resolve it
     char full_path[PATH_MAX];
     // On Windows, check for absolute path (C: or D: drive letter)
-    int is_absolute = (requested_path[0] == '/' || 
-                       (strlen(requested_path) >= 2 && requested_path[1] == ':'));
+    // Note: Unix-style paths like /test_subdir are treated as relative on Windows
+    int is_absolute = (strlen(requested_path) >= 2 && requested_path[1] == ':');  // C: style
     
     if (is_absolute) {
-        // Absolute path - use as is
+        // Absolute path (C: style) - use as is
         snprintf(full_path, sizeof(full_path), "%s", requested_path);
     } else {
-        // Relative path - prepend base path
+        // Relative path (including Unix-style /path) - prepend base path
         snprintf(full_path, sizeof(full_path), "%s/%s", base_path, requested_path);
     }
     
@@ -441,6 +441,131 @@ void file_result_free(file_result_t *result) {
 
 void write_result_free(write_result_t *result) {
     if (result == NULL) return;
+    free(result->error);
+    free(result);
+}
+
+upload_result_t *upload_file(const char *dir, const char *filename, const char *data, size_t len) {
+    upload_result_t *result = xmalloc(sizeof(upload_result_t));
+    memset(result, 0, sizeof(upload_result_t));
+
+    const char *base_path = get_current_directory();
+
+    // Validate inputs
+    if (filename == NULL || strlen(filename) == 0) {
+        result->error = strdup("No filename specified");
+        return result;
+    }
+
+    if (data == NULL || len == 0) {
+        result->error = strdup("No data to upload");
+        return result;
+    }
+
+    // Determine target directory
+    char target_dir[PATH_MAX];
+    if (dir == NULL || strlen(dir) == 0 || strcmp(dir, "/") == 0) {
+        // Use base_path directly for root
+        snprintf(target_dir, sizeof(target_dir), "%s", base_path);
+    } else {
+        // Validate target directory is safe
+        if (!is_path_safe(base_path, dir)) {
+            result->error = strdup("Access denied: invalid directory");
+            return result;
+        }
+        // Build full path
+        build_full_path(base_path, dir, target_dir, sizeof(target_dir));
+    }
+
+    // Resolve the target directory
+    char canonical_dir[PATH_MAX];
+    if (realpath(target_dir, canonical_dir) == NULL) {
+        result->error = strdup("Target directory not found");
+        return result;
+    }
+
+    // Validate the resolved path is within base_path
+    if (!is_path_safe(base_path, canonical_dir)) {
+        result->error = strdup("Access denied: directory outside working directory");
+        return result;
+    }
+
+    // Check if it's a directory
+    struct stat st;
+    if (stat(canonical_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        result->error = strdup("Target is not a directory");
+        return result;
+    }
+
+    // Extract just the basename from filename (prevent path traversal)
+    const char *basename_ptr = strrchr(filename, '/');
+    if (basename_ptr == NULL) {
+        basename_ptr = strrchr(filename, '\\');  // Windows path separator
+    }
+    if (basename_ptr != NULL) {
+        basename_ptr++;  // Skip the separator
+    } else {
+        basename_ptr = filename;
+    }
+
+    // Reject empty basename or names starting with dots
+    if (*basename_ptr == '\0' || *basename_ptr == '.') {
+        result->error = strdup("Invalid filename");
+        return result;
+    }
+
+    // Check size limit using server config (default 100MB)
+    size_t max_size = server != NULL ? server->upload_max_size : (100 * 1024 * 1024);
+    if (len > max_size) {
+        result->error = strdup("File too large");
+        return result;
+    }
+
+    // Generate unique filename if file already exists
+    char *unique_path = generate_unique_filename(canonical_dir, basename_ptr);
+    if (unique_path == NULL) {
+        result->error = strdup("Could not generate unique filename");
+        return result;
+    }
+
+    // Write the file
+    int fd = open(unique_path, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, 0644);
+    if (fd < 0) {
+        free(unique_path);
+        result->error = strdup(strerror(errno));
+        return result;
+    }
+
+    size_t written = 0;
+    ssize_t n;
+    while (written < len) {
+        n = write(fd, data + written, len - written);
+        if (n < 0) {
+            close(fd);
+            unlink(unique_path);  // Clean up partial file
+            free(unique_path);
+            result->error = strdup(strerror(errno));
+            return result;
+        }
+        written += n;
+    }
+
+    close(fd);
+
+    // Get final file size
+    if (stat(unique_path, &st) == 0) {
+        result->size = st.st_size;
+    } else {
+        result->size = len;
+    }
+
+    result->path = unique_path;
+    return result;
+}
+
+void upload_result_free(upload_result_t *result) {
+    if (result == NULL) return;
+    free(result->path);
     free(result->error);
     free(result);
 }

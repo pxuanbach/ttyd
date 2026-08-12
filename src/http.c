@@ -11,6 +11,19 @@
 // File API endpoints
 static const char *api_directory = "/api/directory";
 static const char *api_file = "/api/file";
+static const char *api_upload = "/api/upload";
+
+// Upload context for multipart parsing
+typedef struct {
+    char *target_dir;          // target directory path
+    char *filename;            // extracted filename
+    char *buffer;              // accumulated file content
+    size_t buffer_size;       // current buffer capacity
+    size_t buffer_pos;        // current position in buffer
+    size_t content_length;     // expected total size
+    bool error;               // error flag
+    char *error_msg;          // error message
+} upload_ctx_t;
 
 enum { AUTH_OK, AUTH_FAIL, AUTH_ERROR };
 
@@ -122,6 +135,7 @@ static int send_json_error(struct lws *wsi, unsigned int status, const char *err
   char body[512];
   int n = snprintf(body, sizeof(body), "{\"error\": \"%s\"}", error);
 
+  // Add headers using libwebsockets API
   if (lws_add_http_header_status(wsi, status, &p, end) ||
       lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE,
                                    (unsigned char *)"application/json;charset=utf-8", 30, &p, end) ||
@@ -130,10 +144,10 @@ static int send_json_error(struct lws *wsi, unsigned int status, const char *err
       lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
     return 1;
 
-  if (lws_write(wsi, (unsigned char *)body, (size_t)n, LWS_WRITE_HTTP_HEADERS) < (size_t)n)
+  if (lws_write(wsi, (unsigned char *)body, (size_t)n, LWS_WRITE_HTTP_FINAL) < (int)n)
     return 1;
 
-  return lws_http_transaction_completed(wsi) ? 1 : 0;
+  return 0;
 }
 
 // Helper to send JSON success response
@@ -142,6 +156,7 @@ static int send_json_response(struct lws *wsi, const char *json, size_t len) {
   p = buffer + LWS_PRE;
   end = p + sizeof(buffer) - LWS_PRE;
 
+  // Add headers using libwebsockets API
   if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end) ||
       lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE,
                                    (unsigned char *)"application/json;charset=utf-8", 30, &p, end) ||
@@ -150,10 +165,10 @@ static int send_json_response(struct lws *wsi, const char *json, size_t len) {
       lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
     return 1;
 
-  if (lws_write(wsi, (unsigned char *)json, len, LWS_WRITE_HTTP_HEADERS) < len)
+  if (lws_write(wsi, (unsigned char *)json, len, LWS_WRITE_HTTP_FINAL) < (int)len)
     return 1;
 
-  return lws_http_transaction_completed(wsi) ? 1 : 0;
+  return 0;
 }
 
 // Handle GET /api/directory
@@ -408,6 +423,146 @@ static int handle_api_file_delete(struct lws *wsi) {
   return ret;
 }
 
+// Helper to send upload success response
+static int send_upload_response(struct lws *wsi, const char *path, size_t size) {
+  unsigned char buffer[1024 + LWS_PRE], *p, *end;
+  p = buffer + LWS_PRE;
+  end = p + sizeof(buffer) - LWS_PRE;
+
+  char body[512];
+  int n = snprintf(body, sizeof(body), "{\"success\": true, \"path\": \"%s\", \"size\": %lu}",
+                   path, (unsigned long)size);
+
+  // Add headers using libwebsockets API
+  if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end) ||
+      lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE,
+                                   (unsigned char *)"application/json;charset=utf-8", 30, &p, end) ||
+      lws_add_http_header_content_length(wsi, (unsigned long)n, &p, end) ||
+      lws_finalize_http_header(wsi, &p, end) ||
+      lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
+    return 1;
+
+  if (lws_write(wsi, (unsigned char *)body, (size_t)n, LWS_WRITE_HTTP_FINAL) < (int)n)
+    return 1;
+
+  return 0;
+}
+
+// Handle POST /api/upload (multipart file upload)
+static int handle_api_upload(struct lws *wsi, const char *full_uri, char *body, size_t len) {
+  // Check if upload is enabled
+  if (server == NULL || !server->upload_enabled) {
+    return send_json_error(wsi, 503, "File upload is disabled");
+  }
+
+  // Use the full_uri passed from pss->uri (contains ?path=...)
+  // Extract target directory from query parameter
+  char target_dir[256] = {0};
+  const char *query = strchr(full_uri, '?');
+  lwsl_err("UPLOAD: full_uri=%s, query=%s\n", full_uri, query ? query : "NULL");
+  if (query != NULL) {
+    const char *path_param = strstr(query, "path=");
+    if (path_param != NULL) {
+      path_param += 5;  // skip "path="
+      const char *end = strpbrk(path_param, "& ");
+      int path_len = end ? (int)(end - path_param) : (int)strlen(path_param);
+      if (path_len > 0 && path_len < (int)sizeof(target_dir)) {
+        urldecode(path_param, path_len, target_dir);
+      }
+    }
+  }
+  lwsl_err("UPLOAD: target_dir=%s\n", target_dir);
+
+  // Parse multipart form data manually (simple implementation)
+  // Format: --boundary\r\nContent-Disposition: form-data; name="file"; filename="test.txt"\r\n\r\n<content>\r\n--boundary--
+  char *filename = NULL;
+  char *file_content = NULL;
+  size_t file_size = 0;
+
+  // Simple multipart parsing
+  const char *boundary = NULL;
+  const char *body_end = body + len;
+
+  // Find boundary
+  const char *content_type = NULL;
+  char content_type_hdr[128] = {0};
+  int ct_len = lws_hdr_copy(wsi, content_type_hdr, sizeof(content_type_hdr), WSI_TOKEN_HTTP_CONTENT_TYPE);
+  lwsl_err("UPLOAD: Content-Type header: %s\n", content_type_hdr);
+  if (ct_len > 0) {
+    content_type = strstr(content_type_hdr, "boundary=");
+    if (content_type != NULL) {
+      boundary = content_type + 9;
+    }
+  }
+  lwsl_err("UPLOAD: boundary=%s\n", boundary ? boundary : "NULL");
+
+  if (boundary == NULL) {
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "Missing boundary in multipart form");
+  }
+
+  // Find filename in Content-Disposition
+  const char *cd_start = strstr(body, "filename=\"");
+  if (cd_start != NULL) {
+    cd_start += 10;  // skip filename=""
+    const char *cd_end = strchr(cd_start, '"');
+    if (cd_end != NULL && cd_end > cd_start) {
+      size_t name_len = cd_end - cd_start;
+      filename = xmalloc(name_len + 1);
+      memcpy(filename, cd_start, name_len);
+      filename[name_len] = '\0';
+    }
+  }
+
+  if (filename == NULL) {
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "No file provided");
+  }
+
+  // Find file content (after \r\n\r\n following headers)
+  const char *header_end = strstr(body, "\r\n\r\n");
+  if (header_end != NULL) {
+    header_end += 4;  // skip \r\n\r\n
+    // Find the closing boundary
+    const char *closing_boundary = strstr(header_end, "\r\n");
+    if (closing_boundary != NULL) {
+      file_size = closing_boundary - header_end;
+    } else {
+      file_size = body_end - header_end;
+    }
+
+    file_content = (char *)header_end;
+  }
+
+  if (file_content == NULL || file_size == 0) {
+    free(filename);
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "Empty file");
+  }
+
+  // Check size limit
+  size_t max_size = server->upload_max_size;
+  if (file_size > max_size) {
+    free(filename);
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "File too large");
+  }
+
+  lwsl_err("UPLOAD: calling upload_file dir=%s file=%s size=%zu\n", target_dir[0] ? target_dir : "/", filename ? filename : "NULL", file_size);
+
+  // Upload the file
+  upload_result_t *result = upload_file(target_dir[0] ? target_dir : "/", filename, file_content, file_size);
+  free(filename);
+  lwsl_err("UPLOAD: result error=%s\n", result->error ? result->error : "NONE");
+
+  if (result->error != NULL) {
+    int ret = send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, result->error);
+    upload_result_free(result);
+    return ret;
+  }
+
+  int ret = send_upload_response(wsi, result->path, result->size);
+  upload_result_free(result);
+
+  return ret;
+}
+
 int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
   struct pss_http *pss = (struct pss_http *)user;
   unsigned char buffer[4096 + LWS_PRE], *p, *end;
@@ -418,10 +573,36 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
     case LWS_CALLBACK_HTTP:
       access_log(wsi, (const char *)in);
       snprintf(pss->path, sizeof(pss->path), "%s", (const char *)in);
+      // Save full URI with query string for later use in POST handlers
+      char tmp_uri[256] = {0};
+      lws_hdr_copy(wsi, tmp_uri, sizeof(tmp_uri), WSI_TOKEN_GET_URI);
+      // Also get URI args (query string part)
+      char uri_args[256] = {0};
+      int args_len = lws_hdr_copy(wsi, uri_args, sizeof(uri_args), WSI_TOKEN_HTTP_URI_ARGS);
+      // Build full URI
+      if (args_len > 0) {
+        snprintf(pss->uri, sizeof(pss->uri), "%s?%s", tmp_uri, uri_args);
+      } else {
+        snprintf(pss->uri, sizeof(pss->uri), "%s", tmp_uri);
+      }
+      // Pre-allocate body buffer for POST requests if we know Content-Length
+      if (pss->body == NULL) {
+        char cl_buf[32] = {0};
+        int cl_len = lws_hdr_copy(wsi, cl_buf, sizeof(cl_buf), WSI_TOKEN_HTTP_CONTENT_LENGTH);
+        if (cl_len > 0) {
+          size_t content_len = (size_t)atol(cl_buf);
+          if (content_len > 0 && content_len <= 100 * 1024 * 1024) {
+            pss->body = xmalloc(content_len + 1);
+            pss->body_len = 0;
+          }
+        }
+      }
       // Reset body collection state
       pss->body = NULL;
       pss->body_len = 0;
       pss->body_pos = 0;
+      pss->pending_result = 0;
+      pss->upload_response_len = 0;
 
       switch (check_auth(wsi, pss)) {
         case AUTH_OK:
@@ -456,11 +637,28 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
       // File API routing
       if (strncmp(pss->path, api_directory, strlen(api_directory)) == 0) {
         // GET /api/directory?path=...
-        return handle_api_directory(wsi);
+        int ret = handle_api_directory(wsi);
+        if (ret == 0) {
+          // Response sent, complete the transaction for keep-alive
+          goto try_to_reuse;
+        }
+        return ret;
       }
       if (strncmp(pss->path, api_file, strlen(api_file)) == 0) {
-        // GET /api/file?path=...
-        return handle_api_file_get(wsi);
+        // GET /api/file?path=... or POST /api/file
+        // Check if it's a POST request by looking for body
+        if (pss->body != NULL && pss->body_len > 0) {
+          int ret = handle_api_file_post(wsi, pss->body, pss->body_len);
+          if (ret == 0) goto try_to_reuse;
+          return ret;
+        }
+        int ret = handle_api_file_get(wsi);
+        if (ret == 0) goto try_to_reuse;
+        return ret;
+      }
+      if (strncmp(pss->path, api_upload, strlen(api_upload)) == 0) {
+        // POST /api/upload - return 0 to receive body via LWS_CALLBACK_HTTP_BODY
+        return 0;
       }
       
       // Log WebSocket upgrade attempts
@@ -516,11 +714,9 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
       break;
 
     case LWS_CALLBACK_HTTP_WRITEABLE:
-      if (!pss->buffer || pss->len == 0) {
-        goto try_to_reuse;
-      }
-
-      do {
+      // First check if there's page content to send (from LWS_CALLBACK_HTTP)
+      if (pss->buffer && pss->len > 0) {
+        // Send page content
         int n = sizeof(buffer) - LWS_PRE;
         int m = lws_get_peer_write_allowance(wsi);
         if (m == 0) {
@@ -539,18 +735,104 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
           pss_buffer_free(pss);
           return -1;
         }
-      } while (!lws_send_pipe_choked(wsi) && !done);
-
-      if (!done && pss->ptr < pss->buffer + pss->len) {
-        lws_callback_on_writable(wsi);
-        break;
+        if (!done && pss->ptr < pss->buffer + pss->len) {
+          lws_callback_on_writable(wsi);
+          return 0;
+        }
+        pss_buffer_free(pss);
+        goto try_to_reuse;
       }
-
-      pss_buffer_free(pss);
+      // Handle pending POST result
+      if (pss->pending_result != 0) {
+        lwsl_err("HTTP_WRITEABLE: returning error %d\n", pss->pending_result);
+        pss->pending_result = 0;
+        return pss->pending_result;
+      }
+      // Handle pending upload response - send it now
+      if (pss->upload_response_len > 0) {
+        lwsl_err("HTTP_WRITEABLE: sending upload response\n");
+        int n = lws_write(wsi, (unsigned char *)pss->upload_response, pss->upload_response_len, LWS_WRITE_HTTP_FINAL);
+        pss->upload_response_len = 0;
+        if (n < 0) {
+          return -1;
+        }
+        pss->pending_result = 0;
+        goto try_to_reuse;
+      }
       goto try_to_reuse;
 
     case LWS_CALLBACK_HTTP_FILE_COMPLETION:
       goto try_to_reuse;
+
+    case LWS_CALLBACK_HTTP_BODY:
+      lwsl_err("HTTP_BODY: received len=%zu, total=%zu\n", len, pss->body_len);
+      // Collect POST body data with dynamic reallocation
+      size_t max_size = 100 * 1024 * 1024;  // 100MB
+      size_t needed = pss->body_len + len + 1;
+      
+      if (needed > max_size) {
+        free(pss->body);
+        pss->body = NULL;
+        return 1;
+      }
+      
+      if (pss->body == NULL) {
+        lwsl_err("HTTP_BODY: first allocation\n");
+        pss->body = xmalloc(needed > 32768 ? needed : 32768);
+        pss->body_len = 0;
+      } else {
+        // Check if we need to grow
+        size_t current_capacity = 32768;
+        while (current_capacity < pss->body_len && current_capacity < max_size) {
+          current_capacity *= 2;
+        }
+        if (needed > current_capacity && current_capacity < max_size) {
+          size_t new_capacity = current_capacity * 2;
+          if (new_capacity > max_size) new_capacity = max_size;
+          if (needed > new_capacity) {
+            free(pss->body);
+            pss->body = NULL;
+            return 1;
+          }
+          lwsl_err("HTTP_BODY: realloc to %zu\n", new_capacity);
+          char *new_body = xrealloc(pss->body, new_capacity);
+          if (!new_body) {
+            free(pss->body);
+            pss->body = NULL;
+            return 1;
+          }
+          pss->body = new_body;
+        }
+      }
+      memcpy(pss->body + pss->body_len, in, len);
+      pss->body_len += len;
+      break;
+
+    case LWS_CALLBACK_HTTP_BODY_COMPLETION:
+      // Body fully received, null-terminate it
+      if (pss->body != NULL) {
+        pss->body[pss->body_len] = '\0';
+        lwsl_err("BODY_COMPLETION: path=%s, body_len=%zu\n", pss->path, pss->body_len);
+        int ret = 0;
+        // Process based on path
+        if (strncmp(pss->path, api_upload, strlen(api_upload)) == 0) {
+          lwsl_err("BODY_COMPLETION: calling handle_api_upload\n");
+          ret = handle_api_upload(wsi, pss->uri, pss->body, pss->body_len);
+          lwsl_err("BODY_COMPLETION: handle_api_upload returned %d\n", ret);
+        } else if (strncmp(pss->path, api_file, strlen(api_file)) == 0) {
+          ret = handle_api_file_post(wsi, pss->body, pss->body_len);
+        }
+        // Free body buffer
+        free(pss->body);
+        pss->body = NULL;
+        pss->body_len = 0;
+        // Response already sent by handler, complete the transaction
+        lwsl_err("BODY_COMPLETION: calling try_to_reuse\n");
+        fflush(stderr);
+        goto try_to_reuse;
+      }
+      goto try_to_reuse;
+
 #if (defined(LWS_OPENSSL_SUPPORT) || defined(LWS_WITH_TLS)) && !defined(LWS_WITH_MBEDTLS)
     case LWS_CALLBACK_OPENSSL_PERFORM_CLIENT_CERT_VERIFICATION:
       if (!len || (SSL_get_verify_result((SSL *)in) != X509_V_OK)) {
@@ -570,7 +852,13 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
   /* if we're on HTTP1.1 or 2.0, will keep the idle connection alive */
 try_to_reuse:
-  if (lws_http_transaction_completed(wsi)) return -1;
-
+  lwsl_err("TRY_TO_REUSE: before transaction_completed\n");
+  fflush(stderr);
+  if (lws_http_transaction_completed(wsi)) {
+    lwsl_err("TRY_TO_REUSE: transaction_completed returned -1\n");
+    return -1;
+  }
+  lwsl_err("TRY_TO_REUSE: done, returning 0\n");
+  fflush(stderr);
   return 0;
 }

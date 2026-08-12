@@ -3,6 +3,7 @@ import { Panel, Group, Separator } from 'react-resizable-panels';
 
 import { Terminal } from './terminal';
 import { FileExplorer } from './fileExplorer';
+import { ToastContainer } from './common/Toast';
 
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import type { ClientOptions, FlowControl } from './terminal/xterm';
@@ -111,6 +112,9 @@ export class App extends Component<{}, State> {
                         </Fragment>
                     )}
                 </Group>
+
+                {/* Toast notifications */}
+                <ToastContainer />
             </div>
         );
     }

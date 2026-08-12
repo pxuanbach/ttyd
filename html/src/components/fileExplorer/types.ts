@@ -26,6 +26,19 @@ export interface WriteResult {
     error?: string;
 }
 
+export interface UploadResult {
+    success: boolean;
+    path?: string;
+    size?: number;
+    error?: string;
+}
+
+export interface UploadProgress {
+    loaded: number;
+    total: number;
+    percent: number;
+}
+
 export interface OpenTab {
     path: string;
     name: string;

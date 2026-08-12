@@ -31,6 +31,13 @@ int get_sig(const char *sig_name);
 // Open uri with the default application of system
 int open_uri(char *uri);
 
+// Generate a unique filename if file exists (e.g., file.txt -> file (1).txt)
+// Returns newly allocated string (caller must free), or NULL on error
+char *generate_unique_filename(const char *dir, const char *filename);
+
+// Parse size string like "100M" into bytes
+size_t parse_size(const char *size_str);
+
 #ifdef _WIN32
 char *strsep(char **sp, char *sep);
 const char *quote_arg(const char *arg);

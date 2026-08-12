@@ -5,6 +5,7 @@ import { FileItem } from './FileItem';
 
 interface Props {
     onOpenFile: (entry: FileEntry) => void;
+    onContextMenu?: (entry: FileEntry, x: number, y: number) => void;
 }
 
 interface State {
@@ -17,6 +18,8 @@ interface State {
 }
 
 export class DirectoryTree extends Component<Props, State> {
+    private refreshHandler: (() => void) | null = null;
+
     constructor(props: Props) {
         super(props);
         this.state = {
@@ -31,6 +34,19 @@ export class DirectoryTree extends Component<Props, State> {
 
     async componentDidMount() {
         await this.loadDirectory();
+
+        // Listen for refresh events from FileExplorer
+        this.refreshHandler = () => {
+            this.loadDirectory();
+        };
+        window.addEventListener('fileExplorerRefresh', this.refreshHandler);
+    }
+
+    componentWillUnmount() {
+        // Remove event listener
+        if (this.refreshHandler) {
+            window.removeEventListener('fileExplorerRefresh', this.refreshHandler);
+        }
     }
 
     loadDirectory = async (path?: string) => {
@@ -91,6 +107,13 @@ export class DirectoryTree extends Component<Props, State> {
         }
     };
 
+    handleContextMenu = (entry: FileEntry, x: number, y: number) => {
+        const { onContextMenu } = this.props;
+        if (onContextMenu) {
+            onContextMenu(entry, x, y);
+        }
+    };
+
     reload = () => {
         const { currentPath } = this.state;
         this.loadDirectory(currentPath || undefined);
@@ -137,6 +160,7 @@ export class DirectoryTree extends Component<Props, State> {
                     onToggle={this.handleToggle}
                     onSelect={this.handleSelect}
                     onOpen={this.handleOpen}
+                    onContextMenu={this.handleContextMenu}
                 />
                 {entry.isDirectory && isExpanded && (
                     <div class="tree-children">
