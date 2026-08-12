@@ -45,7 +45,7 @@ jobs:
         run: |
           git clone --depth 1 --branch 2024.12.16 https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          C:\vcpkg\vcpkg.exe install --triplet x64-windows-static libwebsockets libuv json-c zlib openssl
+          C:\vcpkg\vcpkg.exe install --triplet x64-windows-static libwebsockets libuv json-c zlib openssl dirent getopt-win32
 
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
