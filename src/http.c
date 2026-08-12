@@ -1,4 +1,5 @@
 #include <libwebsockets.h>
+#include <ctype.h>
 #include <string.h>
 #include <time.h>
 #include <zlib.h>
