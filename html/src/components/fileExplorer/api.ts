@@ -38,6 +38,14 @@ export class FileApi {
         return this.request<FileResult>(endpoint);
     }
 
+    /**
+     * Build the URL for the /api/image/{path} streaming endpoint.
+     * Used directly as <img src> so the browser handles binary fetching and caching.
+     */
+    static getImageUrl(path: string): string {
+        return `${basePath}/api/image/${encodeURIComponent(path)}`;
+    }
+
     static async writeFile(path: string, content: string): Promise<WriteResult> {
         return this.request<WriteResult>('/api/file', 'POST', { path, content });
     }

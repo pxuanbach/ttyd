@@ -7,11 +7,13 @@
 #include "server.h"
 #include "utils.h"
 #include "file.h"
+#include "compat.h"
 
 // File API endpoints
 static const char *api_directory = "/api/directory";
 static const char *api_file = "/api/file";
 static const char *api_upload = "/api/upload";
+static const char *api_image = "/api/image";
 
 // Upload context for multipart parsing
 typedef struct {
@@ -563,6 +565,98 @@ static int handle_api_upload(struct lws *wsi, const char *full_uri, char *body, 
   return ret;
 }
 
+// Map a lowercase file extension to an image Content-Type. Returns NULL if unsupported.
+static const char *get_image_content_type(const char *ext) {
+  if (ext == NULL) return NULL;
+  if (strcasecmp(ext, "png") == 0) return "image/png";
+  if (strcasecmp(ext, "jpg") == 0) return "image/jpeg";
+  if (strcasecmp(ext, "jpeg") == 0) return "image/jpeg";
+  if (strcasecmp(ext, "gif") == 0) return "image/gif";
+  if (strcasecmp(ext, "webp") == 0) return "image/webp";
+  return NULL;
+}
+
+// Extract lowercase extension from path into out buffer.
+static void get_extension(const char *path, char *out, size_t out_len) {
+  if (out == NULL || out_len == 0) return;
+  out[0] = '\0';
+  if (path == NULL) return;
+  const char *dot = strrchr(path, '.');
+  if (dot == NULL || dot == path || dot[1] == '\0') return;
+  dot++;
+  size_t i = 0;
+  while (dot[i] && i < out_len - 1) {
+    out[i] = (char)tolower((unsigned char)dot[i]);
+    i++;
+  }
+  out[i] = '\0';
+}
+
+// Handle GET /api/image/{path} - streams image bytes via LWS_CALLBACK_HTTP_WRITEABLE chunks.
+// On success returns 0 and stashes the open stream in pss->image_stream; on failure sends an error response and returns non-zero.
+static int handle_api_image(struct lws *wsi, struct pss_http *pss) {
+  char full_uri[512] = {0};
+  int uri_len = lws_hdr_total_length(wsi, WSI_TOKEN_GET_URI);
+  if (uri_len > 0 && uri_len < (int)sizeof(full_uri)) {
+    lws_hdr_copy(wsi, full_uri, sizeof(full_uri), WSI_TOKEN_GET_URI);
+  }
+
+  char file_path[256] = {0};
+  if (strncmp(full_uri, api_image, strlen(api_image)) == 0) {
+    const char *path_part = full_uri + strlen(api_image);
+    if (*path_part == '/') path_part++;
+    if (*path_part != '\0') {
+      int len = (int)strlen(path_part);
+      if (len < (int)sizeof(file_path)) {
+        urldecode(path_part, len, file_path);
+      }
+    }
+  }
+
+  if (!file_path[0]) {
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "Missing path parameter");
+  }
+
+  char ext[16];
+  get_extension(file_path, ext, sizeof(ext));
+  const char *content_type = get_image_content_type(ext);
+  if (content_type == NULL) {
+    return send_json_error(wsi, HTTP_STATUS_BAD_REQUEST, "Unsupported image format");
+  }
+
+  file_stream_t *stream = open_file_stream(file_path);
+  if (stream->error != NULL) {
+    int ret = send_json_error(wsi, HTTP_STATUS_NOT_FOUND, stream->error);
+    close_file_stream(stream);
+    return ret;
+  }
+
+  // Write response headers (status, content-type, content-length).
+  unsigned char hdr_buf[1024 + LWS_PRE], *hp, *hend;
+  hp = hdr_buf + LWS_PRE;
+  hend = hp + sizeof(hdr_buf) - LWS_PRE;
+  size_t ct_len = strlen(content_type);
+
+  if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &hp, hend) ||
+      lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE, (const unsigned char *)content_type, ct_len,
+                                   &hp, hend) ||
+      lws_add_http_header_content_length(wsi, (unsigned long)stream->size, &hp, hend) ||
+      lws_finalize_http_header(wsi, &hp, hend) ||
+      lws_write(wsi, hdr_buf + LWS_PRE, hp - (hdr_buf + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0) {
+    close_file_stream(stream);
+    return 1;
+  }
+
+  // Stash the stream for chunked writing; close_file_stream() will free it later.
+  pss->image_stream = stream;
+  pss->image_sent = 0;
+
+  // Defer body writes to LWS_CALLBACK_HTTP_WRITEABLE.
+  lws_callback_on_writable(wsi);
+  return 0;
+}
+
+
 int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
   struct pss_http *pss = (struct pss_http *)user;
   unsigned char buffer[4096 + LWS_PRE], *p, *end;
@@ -660,6 +754,11 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
         // POST /api/upload - return 0 to receive body via LWS_CALLBACK_HTTP_BODY
         return 0;
       }
+      if (strncmp(pss->path, api_image, strlen(api_image)) == 0) {
+        // GET /api/image/{path} - handler schedules LWS_CALLBACK_HTTP_WRITEABLE for body chunks.
+        // On success return 0 without try_to_reuse so the writable callback can fire.
+        return handle_api_image(wsi, pss);
+      }
       
       // Log WebSocket upgrade attempts
       lwsl_notice("HTTP callback: path='%s', ws_endpoint='%s'\n", pss->path, endpoints.ws);
@@ -714,7 +813,44 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
       break;
 
     case LWS_CALLBACK_HTTP_WRITEABLE:
-      // First check if there's page content to send (from LWS_CALLBACK_HTTP)
+      // First: stream image bytes from /api/image (chunked read from fd).
+      if (pss->image_stream != NULL && pss->image_stream->fd >= 0) {
+        int n = sizeof(buffer) - LWS_PRE;
+        int m = lws_get_peer_write_allowance(wsi);
+        if (m == 0) {
+          lws_callback_on_writable(wsi);
+          return 0;
+        } else if (m != -1 && m < n) {
+          n = m;
+        }
+        size_t remaining = pss->image_stream->size - pss->image_sent;
+        if ((size_t)n > remaining) n = (int)remaining;
+        if (n <= 0) {
+          close_file_stream(pss->image_stream);
+          pss->image_stream = NULL;
+          goto try_to_reuse;
+        }
+        ssize_t bytes_read = (ssize_t)file_stream_read(pss->image_stream, buffer + LWS_PRE, (size_t)n);
+        if (bytes_read <= 0) {
+          close_file_stream(pss->image_stream);
+          pss->image_stream = NULL;
+          return -1;
+        }
+        if (lws_write_http(wsi, buffer + LWS_PRE, (size_t)bytes_read) < bytes_read) {
+          close_file_stream(pss->image_stream);
+          pss->image_stream = NULL;
+          return -1;
+        }
+        pss->image_sent += (size_t)bytes_read;
+        if (pss->image_sent < pss->image_stream->size) {
+          lws_callback_on_writable(wsi);
+          return 0;
+        }
+        close_file_stream(pss->image_stream);
+        pss->image_stream = NULL;
+        goto try_to_reuse;
+      }
+      // Second: existing page content path (from LWS_CALLBACK_HTTP)
       if (pss->buffer && pss->len > 0) {
         // Send page content
         int n = sizeof(buffer) - LWS_PRE;
@@ -844,6 +980,13 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
       }
       break;
 #endif
+    case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
+      // Clean up image-stream handle if the session is torn down mid-stream.
+      if (pss->image_stream != NULL) {
+        close_file_stream(pss->image_stream);
+        pss->image_stream = NULL;
+      }
+      break;
     default:
       break;
   }

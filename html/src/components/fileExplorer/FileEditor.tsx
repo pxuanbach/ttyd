@@ -1,6 +1,7 @@
 import { h, Component } from 'preact';
 import { OpenTab, FileEntry } from './types';
 import { FileApi } from './api';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 interface Props {
     tabs: OpenTab[];
@@ -15,6 +16,7 @@ interface State {
     editingTab: string | null;
     saveStatus: 'idle' | 'saving' | 'saved' | 'error';
     error: string | null;
+    modalImagePath: string | null;
 }
 
 export class FileEditor extends Component<Props, State> {
@@ -24,6 +26,7 @@ export class FileEditor extends Component<Props, State> {
             editingTab: null,
             saveStatus: 'idle',
             error: null,
+            modalImagePath: null,
         };
     }
 
@@ -68,8 +71,6 @@ export class FileEditor extends Component<Props, State> {
 
         try {
             await FileApi.writeFile(name, '');
-            // Notify parent to refresh directory
-            // For now, just open the new file
             const entry: FileEntry = {
                 name,
                 path: name,
@@ -83,9 +84,17 @@ export class FileEditor extends Component<Props, State> {
         }
     };
 
+    handleImageClick = (path: string) => {
+        this.setState({ modalImagePath: path });
+    };
+
+    handleModalClose = () => {
+        this.setState({ modalImagePath: null });
+    };
+
     render() {
         const { tabs, activeTab } = this.props;
-        const { saveStatus, error } = this.state;
+        const { saveStatus, error, modalImagePath } = this.state;
 
         if (tabs.length === 0) {
             return (
@@ -97,6 +106,9 @@ export class FileEditor extends Component<Props, State> {
                 </div>
             );
         }
+
+        const modalImageUrl = modalImagePath ? FileApi.getImageUrl(modalImagePath) : null;
+        const modalImageName = modalImagePath ? tabs.find(t => t.path === modalImagePath)?.name ?? modalImagePath : '';
 
         return (
             <div class="file-editor">
@@ -128,41 +140,66 @@ export class FileEditor extends Component<Props, State> {
                 </div>
 
                 <div class="editor-content">
-                    {tabs.map(tab => (
-                        <div
-                            key={tab.path}
-                            class={`editor-panel ${activeTab === tab.path ? 'active' : ''}`}
-                            style={{ display: activeTab === tab.path ? 'flex' : 'none' }}
-                        >
-                            <div class="editor-toolbar">
-                                <span class="editor-filename">{tab.path}</span>
-                                <div class="editor-actions">
-                                    {tab.isDirty && (
-                                        <button
-                                            class="save-btn"
-                                            onClick={() => this.handleSave(tab.path)}
-                                            disabled={saveStatus === 'saving'}
-                                        >
-                                            {saveStatus === 'saving' ? 'Saving...' : 'Save'}
-                                        </button>
-                                    )}
-                                    {saveStatus === 'saved' && tab.isDirty === false && (
-                                        <span class="save-status saved">Saved</span>
-                                    )}
+                    {tabs.map(tab => {
+                        const isActive = activeTab === tab.path;
+                        const isImage = tab.kind === 'image';
+                        return (
+                            <div
+                                key={tab.path}
+                                class={`editor-panel ${isActive ? 'active' : ''}`}
+                                style={{ display: isActive ? 'flex' : 'none' }}
+                            >
+                                <div class="editor-toolbar">
+                                    <span class="editor-filename">{tab.path}</span>
+                                    <div class="editor-actions">
+                                        {!isImage && tab.isDirty && (
+                                            <button
+                                                class="save-btn"
+                                                onClick={() => this.handleSave(tab.path)}
+                                                disabled={saveStatus === 'saving'}
+                                            >
+                                                {saveStatus === 'saving' ? 'Saving...' : 'Save'}
+                                            </button>
+                                        )}
+                                        {!isImage && saveStatus === 'saved' && tab.isDirty === false && (
+                                            <span class="save-status saved">Saved</span>
+                                        )}
+                                        {isImage && <span class="save-status read-only">Read-only</span>}
+                                    </div>
                                 </div>
+                                {error && <div class="editor-error">{error}</div>}
+                                {isImage ? (
+                                    <div class="image-preview" onClick={() => this.handleImageClick(tab.path)}>
+                                        <img
+                                            class="image-preview-img"
+                                            src={FileApi.getImageUrl(tab.path)}
+                                            alt={tab.name}
+                                            draggable={false}
+                                            title="Click to view full size"
+                                        />
+                                    </div>
+                                ) : (
+                                    <textarea
+                                        class="editor-textarea"
+                                        value={tab.content}
+                                        onInput={e =>
+                                            this.handleContentChange(tab.path, (e.target as HTMLTextAreaElement).value)
+                                        }
+                                        spellcheck={false}
+                                    />
+                                )}
                             </div>
-                            {error && <div class="editor-error">{error}</div>}
-                            <textarea
-                                class="editor-textarea"
-                                value={tab.content}
-                                onInput={e =>
-                                    this.handleContentChange(tab.path, (e.target as HTMLTextAreaElement).value)
-                                }
-                                spellcheck={false}
-                            />
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
+
+                {modalImageUrl && (
+                    <ImagePreviewModal
+                        imageUrl={modalImageUrl}
+                        fileName={modalImageName}
+                        onClose={this.handleModalClose}
+                    />
+                )}
             </div>
         );
     }

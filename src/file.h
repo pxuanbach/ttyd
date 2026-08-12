@@ -40,6 +40,13 @@ typedef struct {
     char *error;        // NULL on success
 } upload_result_t;
 
+// File stream for chunked reads (used by /api/image)
+typedef struct file_stream {
+    int fd;             // open file descriptor, -1 when not open
+    size_t size;        // total file size in bytes
+    char *error;        // NULL on success
+} file_stream_t;
+
 // Path validation - check if path is safe and within allowed base
 bool is_path_safe(const char *base_path, const char *requested_path);
 
@@ -64,6 +71,16 @@ write_result_t *delete_file(const char *path);
 // Upload file (binary) to target directory with auto-rename on conflict
 // Returns upload_result_t with final path and size, or error
 upload_result_t *upload_file(const char *dir, const char *filename, const char *data, size_t len);
+
+// Open file for streaming reads (no size cap; caller reads via file_stream_read).
+// Returns a stream with fd>=0 on success or error string set on failure.
+file_stream_t *open_file_stream(const char *path);
+
+// Read up to len bytes from the stream into buf. Returns bytes read (0 at EOF), or -1 on error.
+int file_stream_read(file_stream_t *stream, void *buf, size_t len);
+
+// Close stream and free the handle. Safe to call with NULL.
+void close_file_stream(file_stream_t *stream);
 
 // Free results
 void dir_result_free(dir_result_t *result);

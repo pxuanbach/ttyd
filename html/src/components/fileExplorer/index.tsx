@@ -3,7 +3,7 @@ import { Panel, Group, Separator } from 'react-resizable-panels';
 import { DirectoryTree } from './DirectoryTree';
 import { FileEditor } from './FileEditor';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
-import { FileEntry, OpenTab, UploadProgress } from './types';
+import { FileEntry, OpenTab, UploadProgress, isImageFile } from './types';
 import { FileApi } from './api';
 
 const EDITOR_STORAGE_KEY = 'ttyd-file-editor-height';
@@ -47,6 +47,29 @@ export class FileExplorer extends Component<Props, State> {
             return;
         }
 
+        const kind = isImageFile(entry.name) ? 'image' : 'text';
+
+        if (kind === 'image') {
+            // Skip readFile() for images - backend serves bytes via /api/image/{path} directly.
+            const newTab: OpenTab = {
+                path: entry.path,
+                name: entry.name,
+                content: '',
+                originalContent: '',
+                isDirty: false,
+                kind: 'image',
+            };
+            this.setState(
+                prev => ({
+                    tabs: [...prev.tabs, newTab],
+                    activeTab: entry.path,
+                    showEditor: true,
+                }),
+                () => this.notifyResize()
+            );
+            return;
+        }
+
         try {
             const result = await FileApi.readFile(entry.path);
             const newTab: OpenTab = {
@@ -55,6 +78,7 @@ export class FileExplorer extends Component<Props, State> {
                 content: result.content,
                 originalContent: result.content,
                 isDirty: false,
+                kind: 'text',
             };
 
             this.setState(

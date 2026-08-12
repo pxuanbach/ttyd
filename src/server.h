@@ -45,6 +45,10 @@ struct pss_http {
   int pending_result;
   char upload_response[512];  // Store upload response for delayed sending
   size_t upload_response_len;
+
+  // For chunked image streaming (/api/image)
+  struct file_stream *image_stream;  // NULL when not streaming
+  size_t image_sent;                 // bytes already written
 };
 
 struct pss_tty {

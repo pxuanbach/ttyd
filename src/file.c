@@ -569,3 +569,67 @@ void upload_result_free(upload_result_t *result) {
     free(result->error);
     free(result);
 }
+
+file_stream_t *open_file_stream(const char *path) {
+    file_stream_t *stream = xmalloc(sizeof(file_stream_t));
+    memset(stream, 0, sizeof(file_stream_t));
+    stream->fd = -1;
+
+    const char *base_path = get_current_directory();
+
+    if (path == NULL || strlen(path) == 0) {
+        stream->error = strdup("No path specified");
+        return stream;
+    }
+
+    if (!is_path_safe(base_path, path)) {
+        stream->error = strdup("Access denied: invalid path");
+        return stream;
+    }
+
+    char full_path[PATH_MAX];
+    build_full_path(base_path, path, full_path, sizeof(full_path));
+
+    char resolved_path[PATH_MAX];
+    if (realpath(full_path, resolved_path) == NULL) {
+        stream->error = strdup("File not found");
+        return stream;
+    }
+
+    if (!is_path_safe(base_path, resolved_path)) {
+        stream->error = strdup("Access denied: outside working directory");
+        return stream;
+    }
+
+    struct stat st;
+    if (stat(resolved_path, &st) != 0) {
+        stream->error = strdup(strerror(errno));
+        return stream;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        stream->error = strdup("Cannot read a directory");
+        return stream;
+    }
+
+    int fd = open(resolved_path, O_RDONLY | O_BINARY);
+    if (fd < 0) {
+        stream->error = strdup(strerror(errno));
+        return stream;
+    }
+
+    stream->fd = fd;
+    stream->size = (size_t)st.st_size;
+    return stream;
+}
+
+int file_stream_read(file_stream_t *stream, void *buf, size_t len) {
+    if (stream == NULL || stream->fd < 0 || buf == NULL || len == 0) return -1;
+    return (int)read(stream->fd, buf, len);
+}
+
+void close_file_stream(file_stream_t *stream) {
+    if (stream == NULL) return;
+    if (stream->fd >= 0) close(stream->fd);
+    free(stream->error);
+    free(stream);
+}
