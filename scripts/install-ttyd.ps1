@@ -1,8 +1,9 @@
 # ttyd Windows Installer Script
 # Run: powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex"
+# Or specify a version: powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/pxuanbach/ttyd/main/scripts/install-ttyd.ps1 | iex -Version '1.7.9'"
 
 param(
-    [string]$Version = "1.7.9",
+    [string]$Version = "",
     [string]$InstallDir = "$env:LOCALAPPDATA\ttyd",
     [switch]$NoPath,
     [switch]$Uninstall
@@ -13,6 +14,23 @@ $Repo = "pxuanbach/ttyd"
 $ZipName = "ttyd-v$Version-win-x64.zip"
 $Url = "https://github.com/$Repo/releases/download/v$Version/$ZipName"
 $ZipPath = "$env:TEMP\$ZipName"
+
+function Get-LatestVersion {
+    try {
+        Write-Host "Checking for latest version..." -ForegroundColor Cyan
+        $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UserAgent "ttyd-installer"
+        $tag = $response.tag_name
+        # Remove 'v' prefix if present
+        if ($tag -match '^v') {
+            return $tag.Substring(1)
+        }
+        return $tag
+    } catch {
+        Write-Host "Warning: Could not fetch latest version from GitHub." -ForegroundColor Yellow
+        Write-Host "Using fallback version: 1.7.10" -ForegroundColor Yellow
+        return "1.7.10"
+    }
+}
 
 function Install-Ttyd {
     Write-Host "Downloading ttyd v$Version..." -ForegroundColor Cyan
@@ -72,5 +90,12 @@ function Uninstall-Ttyd {
 if ($Uninstall) {
     Uninstall-Ttyd
 } else {
+    # Auto-detect latest version if not specified
+    if ([string]::IsNullOrEmpty($Version)) {
+        $Version = Get-LatestVersion
+        $script:ZipName = "ttyd-v$Version-win-x64.zip"
+        $script:Url = "https://github.com/$Repo/releases/download/v$Version/$ZipName"
+        $script:ZipPath = "$env:TEMP\$ZipName"
+    }
     Install-Ttyd
 }
