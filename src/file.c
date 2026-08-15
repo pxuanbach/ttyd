@@ -201,8 +201,9 @@ dir_result_t *list_directory(const char *path) {
     struct stat st;
 
     while ((entry = readdir(dir)) != NULL) {
-        // Skip hidden files/directories
-        if (entry->d_name[0] == '.') continue;
+        // Skip . and .. (special directory entries, not actual files)
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        // Show all other entries including hidden files/folders
 
         char entry_path[PATH_MAX];
         snprintf(entry_path, sizeof(entry_path), "%s/%s", resolved_path, entry->d_name);
